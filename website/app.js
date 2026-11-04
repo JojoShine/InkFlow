@@ -29,7 +29,7 @@
     return element;
   };
   function safeDownload(item) {
-    if (!item || !platformNames[item.platform] || !architectureNames[item.arch] || typeof item.url !== 'string') return false;
+    if (!item || !Object.hasOwn(platformNames, item.platform) || !Object.hasOwn(architectureNames, item.arch) || typeof item.url !== 'string') return false;
     try {
       const url = new URL(item.url);
       const base = new URL(RELEASE_BASE);
