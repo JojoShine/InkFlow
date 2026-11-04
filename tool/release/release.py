@@ -1,4 +1,4 @@
-"""Validate signed desktop artifacts, then publish to OSS. No credentials in files."""
+"""Validate desktop downloads or signed updates, then publish to OSS."""
 import argparse
 import base64
 from datetime import datetime, timezone
@@ -49,26 +49,34 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def prepare(directory, version, build, notes, published_at):
+def prepare(directory, version, build, notes, published_at, *, require_signed_updates=True):
     directory = Path(directory)
     manifest = dict(version=version, build=build, publishedAt=published_at, notes=notes, downloads=[])
     feeds = {}
+    if not require_signed_updates:
+        manifest.update(channel='preview', automaticUpdates=False,
+            distributionNote='此版本提供安装包下载，应用内自动更新尚未启用。')
     for platform, arch in TARGETS:
         name = filename(version, build, platform, arch)
         package, sidecar = directory / name, directory / (name + '.json')
         if not package.is_file() or not sidecar.is_file() or package.stat().st_size == 0:
             raise ValueError(f'missing package or signature metadata: {name}')
         meta = json.loads(sidecar.read_text())
-        for key, expected in dict(file=name, platform=platform, arch=arch, version=version, build=build, size=package.stat().st_size, sha256=sha256(package), verified=True).items():
+        expected_metadata = dict(file=name, platform=platform, arch=arch, version=version, build=build, size=package.stat().st_size, sha256=sha256(package))
+        if require_signed_updates:
+            expected_metadata['verified'] = True
+        for key, expected in expected_metadata.items():
             if meta.get(key) != expected:
                 raise ValueError(f'invalid {key}: {name}')
+        url = BASE + 'releases/' + quote(f'{version}+{build}', safe='') + '/' + quote(name, safe='')
+        download = dict(platform=platform, arch=arch, url=url, size=meta['size'], sha256=meta['sha256'])
+        manifest['downloads'].append(download)
+        if not require_signed_updates:
+            continue
         signature = meta.get('signature', '')
         raw = base64.b64decode(signature, validate=True)
         if not raw or (platform == 'macos' and (len(raw) != 64 or not meta.get('notarized'))):
             raise ValueError(f'missing verified signature/notarization: {name}')
-        url = BASE + 'releases/' + quote(f'{version}+{build}', safe='') + '/' + quote(name, safe='')
-        download = dict(platform=platform, arch=arch, url=url, size=meta['size'], sha256=meta['sha256'])
-        manifest['downloads'].append(download)
         rss = ET.Element('rss', version='2.0')
         channel = ET.SubElement(rss, 'channel')
         ET.SubElement(channel, 'title').text = f'InkFlow {platform} {arch}'
@@ -154,11 +162,12 @@ def main():
     parser.add_argument('--notes', default='tool/release/notes.txt')
     parser.add_argument('--output', default='release-preview')
     parser.add_argument('--publish', action='store_true')
+    parser.add_argument('--downloads-only', action='store_true', help='Publish manual downloads without requiring Apple or update signing; never writes appcast feeds')
     parser.add_argument('--site-root', default='.')
     args = parser.parse_args()
     version, build = read_version(args.pubspec, args.tag)
     notes = [line.strip() for line in Path(args.notes).read_text().splitlines() if line.strip()]
-    manifest, feeds = prepare(args.artifacts, version, build, notes, datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'))
+    manifest, feeds = prepare(args.artifacts, version, build, notes, datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'), require_signed_updates=not args.downloads_only)
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
     for name, data in {**feeds, 'latest.json': json_bytes(manifest)}.items():
@@ -168,8 +177,8 @@ def main():
         token = os.environ.get('OSS_SECURITY_TOKEN')
         auth = oss2.StsAuth(os.environ['OSS_ACCESS_KEY_ID'], os.environ['OSS_ACCESS_KEY_SECRET'], token) if token else oss2.Auth(os.environ['OSS_ACCESS_KEY_ID'], os.environ['OSS_ACCESS_KEY_SECRET'])
         bucket = oss2.Bucket(auth, 'https://oss-cn-hangzhou.aliyuncs.com', 'tbtparent-me', connect_timeout=60)
-        publish(bucket, args.artifacts, manifest, feeds, args.site_root)
-    print(f'Validated {version}+{build}: {len(manifest["downloads"])} signed packages')
+        publish(bucket, args.artifacts, manifest, feeds, None if args.downloads_only else args.site_root)
+    print(f'Validated {version}+{build}: {len(manifest["downloads"])} packages; signed update feeds={bool(feeds)}')
 
 
 if __name__ == '__main__':

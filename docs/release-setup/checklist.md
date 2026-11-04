@@ -2,7 +2,13 @@
 
 所有值填入 [JojoShine/InkFlow 的 Actions repository secrets](https://github.com/JojoShine/InkFlow/settings/secrets/actions)。不要在聊天、issue 或代码中发送密码、私钥、AccessKey。当前普通 Mac/Windows CI 编译不需要下列签名凭据。
 
-## 需要你准备
+## 仅上传 OSS 下载：现在只需要两项
+
+配置 `OSS_ACCESS_KEY_ID` 与 `OSS_ACCESS_KEY_SECRET` 即可使用默认下载发布。Bucket 和路径已固定，不需要 Apple 参数、更新密钥或 Windows 证书。上传角色按 [前缀权限模板](oss-upload-policy.json) 授权，下载对象设为公开可读。
+
+下面是以后启用签名自动更新（variable `INKFLOW_SIGNED_UPDATES=true`）才需要的完整清单。
+
+## 启用签名自动更新时再准备
 
 | 类别 | Secrets 名称 | 内容 |
 | --- | --- | --- |
@@ -43,7 +49,7 @@
 2. 只允许此下载前缀匿名 GetObject，禁止匿名写入；不用公开整个 bucket。
 3. 官网跨域读取 OSS 清单时，CORS 允许来源 `https://tbtparent.me`，方法 GET、HEAD；不启用带凭据跨域请求。
 4. 当前脚本支持长期 RAM AccessKey。若使用 STS，需要 `OSS_SECURITY_TOKEN` 并保证短期凭据在任务期间有效；过期 STS 不适合作为长期无人值守配置。OIDC 可后续适配，不是当前脚本已支持的认证方式。
-5. 密钥可全部先放 repository secrets；若把 OSS 密钥改放 `release` environment，则需要建立该 environment。构建用的签名密钥仍应在 repository secrets 中，因为 build job 不在 release environment。
+5. 当前工作流统一读取 repository secrets，不要求建立额外的 release environment。
 
 ## 配置后交付
 

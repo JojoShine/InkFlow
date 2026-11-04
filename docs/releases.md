@@ -17,11 +17,19 @@ Flutter 固定 `3.41.9`，自带 Dart `3.11.5`；依赖使用已提交 lockfile�
 
 普通构建无签名 secrets 时仍生成 CI 工件；这些工件不代表可公开分发或可自动更新。GitHub Actions 私有仓库构建会使用账户的 Actions 分钟配额。
 
-## 发布前配置
+## 默认：只上传 OSS 供下载
+
+当前 tag 发布默认使用 `--downloads-only`：只校验安装包、大小和 SHA256，上传版本目录与 latest/history 清单；不要求 Apple 证书、公证或更新密钥，也不写 appcast 自动更新 feed，不上传宣发页；网页仍保留在 `https://tbtparent.me/inkflow/`。
+
+现在只需要在 repository secrets 配置 `OSS_ACCESS_KEY_ID` 和 `OSS_ACCESS_KEY_SECRET`，使用已有 Bucket `tbtparent-me` / `Download/inkflow/`。不需要另外建立 release environment。RAM 前缀权限模板见下文；下载对象仍需允许公开读取。
+
+后续确实需要签名自动更新时，再将仓库 variable `INKFLOW_SIGNED_UPDATES` 设置为 `true`，并配置下面的完整签名资料。普通下载与签名自动更新是不同发布模式。
+
+## 可选：签名自动更新配置
 
 用户需要提供的资料与首次可生成的更新密钥见 [一次配置清单](release-setup/checklist.md)，限定 OSS 权限见 [RAM policy](release-setup/oss-upload-policy.json)。
 
-所有敏感值只使用 GitHub Actions Secrets（Settings → Secrets and variables → Actions）。建立 `release` environment，推荐为生产 OSS secrets 配置 environment protection。构建时使用的签名 secrets 必须是 **repository secrets**，因为 build job 不在 release environment 内；OSS secrets 可放 release environment。
+所有敏感值使用 GitHub Actions repository secrets（Settings → Secrets and variables → Actions）。以下“正式发布必需”指启用签名自动更新模式时的要求；纯 OSS 下载只需要前述两个 OSS Secrets。
 
 | Secret | 用途与要求 |
 | --- | --- |
@@ -50,10 +58,10 @@ macOS 沙盒集成需要 Sparkle installer launcher 配置、mach-lookup excepti
 
 1. 修改 `pubspec.yaml` 为例如 `0.1.0+1`，并更新 `tool/release/notes.txt`（每个非空行是一条发布说明）。版本号使用三段稳定版本，不支持 prerelease。build 取 pubspec，禁止 Actions 自增或覆盖。
 2. 提交变更，确认普通 CI 双端通过，再打 `v0.1.0` tag 并 push。tag 必须与 pubspec 的 `0.1.0` 精确相符，build 号必须大于 OSS **所有历史发布**，语义版本不能下降。相同语义版本的补包也须提高 build。
-3. 三个目标全部构建并完成签名后，publish job 下载工件，重新核验文件名、目标、版本、build、长度、SHA256、签名验证状态与 mac notarization 状态。缺包、未签名、字节改变、缺 secrets 都会拒绝公开发布。
+3. 三个目标构建完成后，publish job 下载工件，核验文件名、目标、版本、build、长度和 SHA256。默认下载模式允许未签名安装包，但不发布自动更新 feed；开启签名自动更新模式后，额外校验更新签名状态及 mac notarization 状态。缺包、字节改变和缺 OSS 凭据都会拒绝发布。
 4. SDK 获取 OSS 独占 `.release.lock`，核对已有 latest/history，上传不可变版本目录，再上传静态站与 feed/history，最后写 `latest.json`。成功后自动释放 lock。整个发布不会创建 GitHub public release。
 
-初始版本使用 `v0.1.0` + build `1`。由于当前尚未配置 secrets，tag 构建能产出工件，正式 OSS 发布会明确失败，**不会发布无签名 feed**。本次配置不包含实际 OSS 上传。
+初始版本使用 `v0.1.0` + build `1`。当前尚未配置 OSS Secrets，因此还不能实际上传；配置两个上传凭据后，默认下载发布不再受 Apple 参数阻塞。下载模式不会写入或替换已有 appcast；未签名自动更新 feed 始终禁止发布。
 
 ## 对象与协议
 
@@ -111,7 +119,7 @@ GitHub `oss-production-release` concurrency 加 OSS exclusive lock 防止并发�
 ```sh
 python3 -m unittest discover -s tool/release -v
 python3 -m pip install -r tool/release/requirements.txt
-python3 tool/release/release.py --tag v0.1.0 --artifacts dist
+python3 tool/release/release.py --tag v0.1.0 --artifacts dist --downloads-only
 ```
 
 默认只生成 `release-preview/` 清单，不联网、不上传。只有显式添加 `--publish` 才写 OSS，且仍执行所有验证。不在本地随意运行 `configure_keys.py`：它会修改原生公共密钥配置，设计用于一次性的 Actions checkout。

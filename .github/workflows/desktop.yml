@@ -62,9 +62,9 @@ jobs:
         run: flutter test test/transfer/text_transfer_test.dart
       - name: Configure public update keys
         env:
-          MACOS_ED25519_PUBLIC_KEY: ${{ secrets.MACOS_ED25519_PUBLIC_KEY }}
-          WINDOWS_DSA_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/') && secrets.WINDOWS_DSA_PRIVATE_KEY || '' }}
-          WINDOWS_DSA_PUBLIC_KEY: ${{ secrets.WINDOWS_DSA_PUBLIC_KEY }}
+          MACOS_ED25519_PUBLIC_KEY: ${{ vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.MACOS_ED25519_PUBLIC_KEY || '' }}
+          WINDOWS_DSA_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/') && vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.WINDOWS_DSA_PRIVATE_KEY || '' }}
+          WINDOWS_DSA_PUBLIC_KEY: ${{ vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.WINDOWS_DSA_PUBLIC_KEY || '' }}
         run: python tool/release/configure_keys.py ${{ matrix.platform }}
       - name: Build macOS app bundle
         if: matrix.platform == 'macos'
@@ -75,7 +75,7 @@ jobs:
       - name: Package macOS and sign update
         if: matrix.platform == 'macos'
         env:
-          MACOS_ED25519_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/') && secrets.MACOS_ED25519_PRIVATE_KEY || '' }}
+          MACOS_ED25519_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/') && vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.MACOS_ED25519_PRIVATE_KEY || '' }}
           MACOS_CERTIFICATE_P12: ${{ startsWith(github.ref, 'refs/tags/') && secrets.MACOS_CERTIFICATE_P12 || '' }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
@@ -86,7 +86,7 @@ jobs:
       - name: Package Windows installer and sign update
         if: matrix.platform == 'windows'
         env:
-          WINDOWS_DSA_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/') && secrets.WINDOWS_DSA_PRIVATE_KEY || '' }}
+          WINDOWS_DSA_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/') && vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.WINDOWS_DSA_PRIVATE_KEY || '' }}
           WINDOWS_CERTIFICATE_PFX: ${{ startsWith(github.ref, 'refs/tags/') && secrets.WINDOWS_CERTIFICATE_PFX || '' }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: ./tool/release/package_windows.ps1
@@ -103,7 +103,6 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build
     runs-on: ubuntu-24.04
-    environment: release
     concurrency:
       group: oss-production-release
       cancel-in-progress: false
@@ -123,13 +122,19 @@ jobs:
           OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
         run: python -c 'import os; assert all(os.environ.get(k) for k in ("OSS_ACCESS_KEY_ID","OSS_ACCESS_KEY_SECRET")), "Missing OSS release credentials"'
-      - name: Validate signed packages and publish OSS
+      - name: Validate packages and publish OSS
         env:
           RELEASE_TAG: ${{ github.ref_name }}
+          SIGNED_UPDATES: ${{ vars.INKFLOW_SIGNED_UPDATES || 'false' }}
           OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
           OSS_SECURITY_TOKEN: ${{ secrets.OSS_SECURITY_TOKEN }}
-        run: python tool/release/release.py --tag "$RELEASE_TAG" --publish
+        run: |
+          options=()
+          if [ "$SIGNED_UPDATES" != "true" ]; then
+            options+=(--downloads-only)
+          fi
+          python tool/release/release.py --tag "$RELEASE_TAG" --publish "${options[@]}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

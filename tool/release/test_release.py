@@ -52,6 +52,23 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.prepare(self.root, '0.1.0', 2, [], '2026-11-04T00:00:00Z')
 
+    def test_downloads_only_accepts_unsigned_without_update_feeds(self):
+        for platform, arch in release.TARGETS:
+            self.package(platform, arch, signature=False)
+        manifest, feeds = release.prepare(self.root, '0.1.0', 2, [],
+            '2026-11-05T00:00:00Z', require_signed_updates=False)
+        self.assertEqual(len(manifest['downloads']), 3)
+        self.assertEqual(feeds, {})
+        self.assertFalse(manifest['automaticUpdates'])
+
+    def test_downloads_only_still_rejects_tampered_package(self):
+        for platform, arch in release.TARGETS:
+            self.package(platform, arch, signature=False)
+        self.package('macos', 'arm64', signature=False).write_bytes(b'tampered')
+        with self.assertRaises(ValueError):
+            release.prepare(self.root, '0.1.0', 2, [],
+                '2026-11-05T00:00:00Z', require_signed_updates=False)
+
     def test_hash_tampering_rejected(self):
         self.all_packages()
         self.package('macos', 'arm64').write_bytes(b'changed after signing')
