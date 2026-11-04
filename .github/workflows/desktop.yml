@@ -39,12 +39,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-15
+          - runner: macos-26-intel
             platform: macos
-            arch: arm64
-          - runner: macos-15-intel
-            platform: macos
-            arch: x64
+            arch: universal
           - runner: windows-2022
             platform: windows
             arch: x64
@@ -85,7 +82,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash tool/release/package_macos.sh ${{ matrix.arch }}
+        run: bash tool/release/package_macos.sh universal
       - name: Package Windows installer and sign update
         if: matrix.platform == 'windows'
         env:
