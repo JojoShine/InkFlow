@@ -1,0 +1,23 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["oss:GetObject", "oss:PutObject"],
+      "Resource": ["acs:oss:*:*:tbtparent-me/Download/inkflow/*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["oss:DeleteObject"],
+      "Resource": ["acs:oss:*:*:tbtparent-me/Download/inkflow/.release.lock"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["oss:ListObjects"],
+      "Resource": ["acs:oss:*:*:tbtparent-me"],
+      "Condition": {
+        "StringLike": {"oss:Prefix": ["Download/inkflow/", "Download/inkflow/*"]}
+      }
+    }
+  ]
+}

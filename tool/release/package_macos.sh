@@ -7,7 +7,7 @@ if [ "$1" = universal ]; then
   # runner, Dart AOT code, and engine before claiming either download target.
   app=build/macos/Build/Products/Release/inkflow.app
   for binary in "$app/Contents/MacOS/inkflow" "$app/Contents/Frameworks/App.framework/App" "$app/Contents/Frameworks/FlutterMacOS.framework/FlutterMacOS"; do
-    lipo -verify_arch x86_64 arm64 "$binary"
+    lipo "$binary" -verify_arch x86_64 arm64
   done
   python3 tool/release/sign_artifact.py macos arm64
   python3 tool/release/sign_artifact.py macos x64

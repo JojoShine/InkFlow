@@ -10,15 +10,16 @@
 
 | 平台 | Runner | 工件 |
 | --- | --- | --- |
-| macOS Apple Silicon | `macos-15` (arm64) | 完整 `.app` 的 ZIP |
-| macOS Intel | `macos-15-intel` (x64) | 完整 `.app` 的 ZIP |
+| macOS Apple Silicon / Intel | `macos-26-intel`，构建通用二进制 | 两种架构各自的完整 `.app` ZIP |
 | Windows | `windows-2022` (x64) | Inno Setup 安装 EXE |
 
-Flutter 固定 `3.41.9`，自带 Dart `3.11.5`；依赖使用已提交 lockfile。mac 包保留 framework、XPC/helper、资源与符号链接；脚本检查实际主程序具有对应架构。Windows 安装器递归包含完整 Release 目录、Flutter engine、插件 DLL、assets，并添加 Visual Studio 已安装的 x64 VC CRT app-local DLL，不分发孤立 EXE。Windows runner 必须预装 Inno Setup 6 与 Visual C++ redistributable，缺失时明确报错。
+Flutter 固定 `3.41.9`，自带 Dart `3.11.5`；依赖使用已提交 lockfile。mac 包保留 framework、XPC/helper、资源与符号链接；通用打包先验证主程序、App.framework 和 FlutterMacOS.framework 均含 x86_64 / arm64，再生成两份架构 feed 对应的包。Windows 安装器递归包含完整 Release 目录、Flutter engine、插件 DLL、assets，并添加 Visual Studio 已安装的 x64 VC CRT app-local DLL，不分发孤立 EXE。Windows runner 必须预装 Inno Setup 6 与 Visual C++ redistributable，缺失时明确报错。
 
 普通构建无签名 secrets 时仍生成 CI 工件；这些工件不代表可公开分发或可自动更新。GitHub Actions 私有仓库构建会使用账户的 Actions 分钟配额。
 
 ## 发布前配置
+
+用户需要提供的资料与首次可生成的更新密钥见 [一次配置清单](release-setup/checklist.md)，限定 OSS 权限见 [RAM policy](release-setup/oss-upload-policy.json)。
 
 所有敏感值只使用 GitHub Actions Secrets（Settings → Secrets and variables → Actions）。建立 `release` environment，推荐为生产 OSS secrets 配置 environment protection。构建时使用的签名 secrets 必须是 **repository secrets**，因为 build job 不在 release environment 内；OSS secrets 可放 release environment。
 

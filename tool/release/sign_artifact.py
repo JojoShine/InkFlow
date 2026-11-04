@@ -24,7 +24,7 @@ if args.platform == 'macos':
     app = Path('build/macos/Build/Products/Release/inkflow.app')
     # Check every architecture claim against the compiled executable itself.
     expected = 'arm64' if args.arch == 'arm64' else 'x86_64'
-    subprocess.run(['lipo', '-verify_arch', expected, str(app / 'Contents/MacOS/inkflow')], check=True)
+    subprocess.run(['lipo', str(app / 'Contents/MacOS/inkflow'), '-verify_arch', expected], check=True)
     subprocess.run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(app), str(artifact)], check=True)
     notarized = Path('dist/notarized').is_file()
     private = os.environ.get('MACOS_ED25519_PRIVATE_KEY', '').strip()
