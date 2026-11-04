@@ -33,3 +33,5 @@ GitHub Actions 在 push / PR 构建 macOS Apple Silicon、macOS Intel、Windows 
 配置方法、Secrets 清单、首次发布与恢复说明见 [发布文档](docs/releases.md)。
 
 不将作品、个人书库、私钥或上传凭据提交到版本库。
+
+当前公开预览：[tbtparent.me/inkflow/](https://tbtparent.me/inkflow/)。两端预览下载的来源、验证记录和临时分发方式见 [预览下载说明](docs/preview-downloads.md)。

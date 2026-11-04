@@ -18,7 +18,8 @@
   });
 
   const platformNames = { macos: 'macOS', windows: 'Windows' };
-  const architectureNames = { arm64: 'ARM64', x64: 'x64' };
+  const architectureNames = { arm64: 'ARM64', x64: 'x64', universal: '通用版' };
+  const DOWNLOAD_BASES = [RELEASE_BASE, 'https://tbtparent.me/inkflow/downloads/'];
   const detectedPlatform = /Mac/i.test(navigator.platform || '') ? 'macos'
     : /Win/i.test(navigator.platform || '') ? 'windows' : null;
   const platformOrder = detectedPlatform === 'windows' ? ['windows', 'macos'] : ['macos', 'windows'];
@@ -32,10 +33,13 @@
     if (!item || !Object.hasOwn(platformNames, item.platform) || !Object.hasOwn(architectureNames, item.arch) || typeof item.url !== 'string') return false;
     try {
       const url = new URL(item.url);
-      const base = new URL(RELEASE_BASE);
       const path = decodeURIComponent(url.pathname);
-      return url.protocol === 'https:' && url.origin === base.origin && !url.username && !url.password
-        && url.pathname.startsWith(base.pathname) && path.startsWith(base.pathname)
+      const allowedLocation = DOWNLOAD_BASES.some(value => {
+        const base = new URL(value);
+        return url.origin === base.origin && url.pathname.startsWith(base.pathname) && path.startsWith(base.pathname);
+      });
+      return url.protocol === 'https:' && allowedLocation && !url.username && !url.password
+        && (item.arch !== 'universal' || item.platform === 'macos')
         && !path.includes('..') && !path.includes('\\') && !url.search && !url.hash
         && (item.platform === 'macos' ? /\.(zip|dmg)$/i : /\.(exe|zip)$/i).test(path);
     } catch { return false; }
@@ -70,7 +74,7 @@
   }
   function packageLabel(item) {
     const architecture = item.platform === 'macos'
-      ? (item.arch === 'arm64' ? 'Apple 芯片' : 'Intel 芯片')
+      ? (item.arch === 'universal' ? 'Apple / Intel 通用' : item.arch === 'arm64' ? 'Apple 芯片' : 'Intel 芯片')
       : architectureNames[item.arch];
     return `${platformNames[item.platform]} · ${architecture}`;
   }
@@ -87,7 +91,7 @@
       if (!packages.length) {
         const card = node('div', undefined, 'download-item');
         const label = node('div');
-        label.append(node('h3', platformNames[platform]), node('p', platform === 'macos' ? 'Apple 芯片 / Intel 芯片' : 'x64 / ARM64'));
+        label.append(node('h3', platformNames[platform]), node('p', platform === 'macos' ? 'Apple 芯片 / Intel 芯片' : 'x64'));
         card.append(label, node('span', release ? '暂不可用' : '尚未发布', 'unavailable'));
         container.append(card);
       }
@@ -111,11 +115,12 @@
   }
   function renderLatest(release) {
     document.getElementById('release-status').textContent = release
-      ? `最新版本 v${release.version} · ${dateLabel(release.publishedAt)} · 构建 ${release.build}`
+      ? `${release.channel === 'preview' ? '预览版' : '最新版本'} v${release.version} · ${dateLabel(release.publishedAt)} · 构建 ${release.build}`
       : '暂未获取到发布清单。当前没有可用的下载地址，请稍后重新检查。';
     renderDownloads(release);
     const notes = document.getElementById('latest-notes');
     notes.replaceChildren();
+    if (release && typeof release.distributionNote === 'string') notes.append(node('p', release.distributionNote, 'distribution-note'));
     if (release && release.notes.length) notes.append(node('h3', '这个版本更新了什么'), notesList(release.notes));
   }
   function renderHistory(releases) {
