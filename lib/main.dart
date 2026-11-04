@@ -1,122 +1,206 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:window_manager/window_manager.dart';
+import 'package:screen_retriever/screen_retriever.dart';
+import 'app/inkflow_app.dart';
+import 'features/workbench/workbench_controller.dart';
+import 'features/updates/update_controller.dart';
+import 'features/migration/initial_migration_dialog.dart';
+import 'core/platform/instance_coordinator.dart';
+import 'app/desktop_actions.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+InstanceLease? _instanceLease;
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
+Future<void> main(List<String> arguments) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+  final root = await getApplicationSupportDirectory();
+  final controller = WorkbenchController(root);
+  controller.session.addListener(() {
+    if (controller.session.isUpdateLocked) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
+  });
+  final ready = Completer<void>();
+  controller.updates = await _createUpdates(controller);
+  final requestedPath = arguments.isEmpty ? null : arguments.first;
+  _instanceLease = await InstanceCoordinator(root).start(
+    requestedPath: requestedPath,
+    onActivate: (path) async {
+      await ready.future;
+      await controller.services.focusWindow();
+      if (path != null) {
+        try {
+          await controller.openWork(Directory(path));
+        } on FileSystemException catch (error) {
+          controller.notice = error.message;
+          controller.refresh();
+        } on FormatException catch (error) {
+          controller.notice = error.message;
+          controller.refresh();
+        }
+      }
+    },
+  );
+  if (!_instanceLease!.isPrimary) {
+    exit(0);
   }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  final listener = _AppWindow(controller);
+  windowManager.addListener(listener);
+  await windowManager.setPreventClose(true);
+  const lifecycle = MethodChannel('inkflow/lifecycle');
+  lifecycle.setMethodCallHandler((call) async {
+    if (call.method == 'requestQuit') return controller.prepareToQuit();
+    if (call.method == 'fileAction') {
+      await ready.future;
+      await dispatchDesktopAction(controller, call.arguments as String);
+      return true;
+    }
+    return null;
+  });
+  if (Platform.isMacOS) {
+    bool? previousWorkOpen;
+    controller.addListener(() {
+      final open = controller.work != null;
+      if (previousWorkOpen != open) {
+        previousWorkOpen = open;
+        lifecycle.invokeMethod<void>('setWorkOpen', open);
+      }
     });
   }
+  runApp(InkFlowApp(controller: controller));
+  final displays = await screenRetriever.getAllDisplays();
+  final cursor = await screenRetriever.getCursorScreenPoint();
+  final primary = await screenRetriever.getPrimaryDisplay();
+  final display = displays.firstWhere(
+    (display) => ((display.visiblePosition ?? Offset.zero) & display.size)
+        .contains(cursor),
+    orElse: () => primary,
+  );
+  final available = display.visibleSize ?? display.size;
+  final initialSize = Size(
+    math.min(1360, available.width - 24),
+    math.min(1000, available.height - 24),
+  );
+  await windowManager.waitUntilReadyToShow(
+    WindowOptions(
+      size: initialSize,
+      minimumSize: Size(
+        math.min(960, initialSize.width),
+        math.min(640, initialSize.height),
+      ),
+      center: true,
+      title: 'InkFlow',
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: true,
+      backgroundColor: Color(0xfff3efe7),
+    ),
+    () async {
+      await windowManager.show();
+      await windowManager.focus();
+    },
+  );
+  await WidgetsBinding.instance.endOfFrame;
+  final context = inkFlowNavigatorKey.currentContext;
+  if (context == null ||
+      !context.mounted ||
+      !await showInitialDataMigration(context, root)) {
+    await windowManager.close();
+    return;
+  }
+  await controller.initialize(demo: const bool.fromEnvironment('INKFLOW_DEMO'));
+  unawaited(controller.updates!.initialize());
+  ready.complete();
+}
+
+Future<UpdateController> _createUpdates(WorkbenchController controller) async {
+  var enabled = false;
+  var reason = '此安装包的更新配置尚未完成，请使用正式发布版本。';
+  String? feed;
+  const safety = MethodChannel('inkflow/update-safety');
+  try {
+    final channel = Platform.isWindows
+        ? safety
+        : const MethodChannel('inkflow/desktop');
+    final configuration = await channel.invokeMapMethod<String, Object?>(
+      Platform.isWindows ? 'configuration' : 'updateConfiguration',
+    );
+    enabled = configuration?['enabled'] == true;
+    reason = configuration?['reason'] as String? ?? reason;
+    feed = configuration?['feedURL'] as String?;
+  } on MissingPluginException {
+    reason = '此安装包尚未提供安全更新支持，请使用正式发布版本。';
+  } on PlatformException {
+    reason = '无法验证此安装包的更新配置，请使用正式发布版本。';
+  }
+  late final UpdateController updates;
+  updates = UpdateController(
+    enabled: enabled,
+    disabledReason: reason,
+    feedURL: feed,
+    saveBeforeCheck: controller.flushAll,
+    prepareForInstall: controller.prepareForUpdate,
+    resumeEditing: controller.resumeAfterUpdate,
+    quitAfterPrepared: () async {
+      await const MethodChannel(
+        'inkflow/lifecycle',
+      ).invokeMethod<void>('allowQuit');
+      await windowManager.destroy();
+    },
+    prepareBackend: Platform.isWindows
+        ? () async {
+            safety.setMethodCallHandler((call) async {
+              if (call.method == 'prepareToInstall') {
+                return updates.prepareNativeInstallation();
+              }
+              if (call.method == 'resumeEditing') {
+                await updates.cancelNativeInstallation();
+              }
+              return null;
+            });
+            return await safety.invokeMethod<bool>('configure') == true;
+          }
+        : null,
+  );
+  return updates;
+}
+
+class _AppWindow with WindowListener {
+  _AppWindow(this.controller);
+  final WorkbenchController controller;
+  bool _closing = false;
+  @override
+  void onWindowFocus() {
+    unawaited(controller.checkExternal());
+  }
 
   @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
-    );
+  void onWindowClose() async {
+    if (_closing) return;
+    _closing = true;
+    try {
+      if (await controller.prepareToQuit()) {
+        if (Platform.isMacOS) {
+          await const MethodChannel(
+            'inkflow/lifecycle',
+          ).invokeMethod<void>('allowQuit');
+        }
+        await windowManager.destroy();
+        return;
+      }
+    } catch (_) {
+      try {
+        await controller.resumeAfterUpdate();
+      } catch (_) {
+        controller.notice = '恢复编辑未完成，请先检查稿件的保存状态。';
+        controller.refresh();
+      }
+    }
+    _closing = false;
+    await windowManager.focus();
   }
 }

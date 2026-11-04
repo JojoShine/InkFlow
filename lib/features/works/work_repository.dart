@@ -15,7 +15,11 @@ class ChapterDocument {
 }
 
 class WorkRepository {
-  static Future<WorkHandle> create(Directory root, String title) async {
+  static Future<WorkHandle> create(
+    Directory root,
+    String title, {
+    WorkDetails details = const WorkDetails(),
+  }) async {
     await root.create(recursive: true);
     final store = RecordStore(LocalFileStore(root));
     if (await store.read('work.json') != null) {
@@ -23,6 +27,7 @@ class WorkRepository {
     }
     final manifest = WorkManifest(
       workId: newId(),
+      details: details,
       title: title,
       chapterIds: [],
     );
@@ -95,8 +100,9 @@ class WorkHandle {
     if (await notesDirectory.exists()) {
       await for (final file in notesDirectory.list()) {
         if (file is! File ||
-            !RegExp(r'[/\\][a-f0-9]{32}\.json$').hasMatch(file.path))
+            !RegExp(r'[/\\][a-f0-9]{32}\.json$').hasMatch(file.path)) {
           continue;
+        }
         final bytes = await file.readAsBytes();
         final note = NoteRecord.decode(bytes);
         if (!file.path.endsWith('${note.id}.json')) {
@@ -130,10 +136,45 @@ class WorkHandle {
     }
   }
 
-  Future<ChapterRecord> createChapter(String title, {String text = ''}) async {
+  Future<void> updateCover(List<int>? png) => updateDetails(
+    title: manifest.title,
+    details: manifest.details,
+    cover: png,
+    changeCover: true,
+  );
+
+  String volumeForChapter(String id) =>
+      manifest.chapterVolumes[id] ?? manifest.volumes.first.id;
+
+  List<String> _orderedChapters(
+    List<String> ids,
+    List<WorkVolume> volumes,
+    Map<String, String> memberships,
+  ) => [
+    for (final volume in volumes)
+      ...ids.where(
+        (id) => (memberships[id] ?? manifest.volumes.first.id) == volume.id,
+      ),
+  ];
+
+  Future<ChapterRecord> createChapter(
+    String title, {
+    String text = '',
+    String? volumeId,
+  }) async {
+    final target = volumeId ?? manifest.volumes.first.id;
+    if (!manifest.volumes.any((volume) => volume.id == target)) {
+      throw const FormatException('卷不存在');
+    }
     final chapter = ChapterRecord(id: newId(), title: title);
+    final memberships = {...manifest.chapterVolumes, chapter.id: target};
     final next = manifest.copyWith(
-      chapterIds: [...manifest.chapterIds, chapter.id],
+      chapterVolumes: memberships,
+      chapterIds: _orderedChapters(
+        [...manifest.chapterIds, chapter.id],
+        manifest.volumes,
+        memberships,
+      ),
     );
     await _mutate({
       '${_chapter(chapter.id)}.txt': utf8.encode(text),
@@ -186,8 +227,129 @@ class WorkHandle {
         !ids.toSet().containsAll(manifest.chapterIds)) {
       throw const FormatException('章节顺序与作品不一致');
     }
-    final next = manifest.copyWith(chapterIds: ids);
+    final next = manifest.copyWith(
+      chapterIds: _orderedChapters(
+        ids,
+        manifest.volumes,
+        manifest.chapterVolumes,
+      ),
+    );
     await _mutate({'work.json': WorkCodec.encodeManifest(next)});
+    manifest = next;
+  }
+
+  Future<WorkVolume> createVolume(String title) async {
+    final volume = WorkVolume(id: newId(), title: title);
+    final next = manifest.copyWith(volumes: [...manifest.volumes, volume]);
+    await _mutate({'work.json': WorkCodec.encodeManifest(next)});
+    manifest = next;
+    return volume;
+  }
+
+  Future<void> renameVolume(String id, String title) async {
+    if (!manifest.volumes.any((v) => v.id == id)) {
+      throw const FormatException('卷不存在');
+    }
+    final next = manifest.copyWith(
+      volumes: [
+        for (final v in manifest.volumes) v.id == id ? v.rename(title) : v,
+      ],
+    );
+    await _mutate({'work.json': WorkCodec.encodeManifest(next)});
+    manifest = next;
+  }
+
+  Future<void> reorderVolumes(List<String> ids) async {
+    if (ids.length != manifest.volumes.length ||
+        ids.toSet().length != ids.length ||
+        !ids.toSet().containsAll(manifest.volumes.map((v) => v.id))) {
+      throw const FormatException('卷顺序与作品不一致');
+    }
+    final volumes = [
+      for (final id in ids) manifest.volumes.firstWhere((v) => v.id == id),
+    ];
+    final memberships = {
+      for (final id in manifest.chapterIds) id: volumeForChapter(id),
+    };
+    final next = manifest.copyWith(
+      volumes: volumes,
+      chapterVolumes: memberships,
+      chapterIds: _orderedChapters(manifest.chapterIds, volumes, memberships),
+    );
+    await _mutate({'work.json': WorkCodec.encodeManifest(next)});
+    manifest = next;
+  }
+
+  Future<void> moveChapter(
+    String id,
+    String volumeId, {
+    String? beforeChapterId,
+  }) async {
+    if (!chapters.containsKey(id) ||
+        !manifest.volumes.any((v) => v.id == volumeId)) {
+      throw const FormatException('章节或目标卷不存在');
+    }
+    if (beforeChapterId == id) return;
+    if (beforeChapterId != null &&
+        (!chapters.containsKey(beforeChapterId) ||
+            volumeForChapter(beforeChapterId) != volumeId)) {
+      throw const FormatException('目标章节不在所选卷中');
+    }
+    final memberships = {...manifest.chapterVolumes, id: volumeId};
+    final ids = manifest.chapterIds.where((value) => value != id).toList();
+    ids.insert(
+      beforeChapterId == null ? ids.length : ids.indexOf(beforeChapterId),
+      id,
+    );
+    final next = manifest.copyWith(
+      chapterVolumes: memberships,
+      chapterIds: _orderedChapters(ids, manifest.volumes, memberships),
+    );
+    await _mutate({'work.json': WorkCodec.encodeManifest(next)});
+    manifest = next;
+  }
+
+  Future<void> deleteVolume(String id) async {
+    if (!manifest.volumes.any((v) => v.id == id)) {
+      throw const FormatException('卷不存在');
+    }
+    if (manifest.volumes.length == 1) throw const FormatException('作品至少保留一卷');
+    final volumes = manifest.volumes.where((v) => v.id != id).toList();
+    final memberships = {
+      for (final chapterId in manifest.chapterIds)
+        chapterId: volumeForChapter(chapterId) == id
+            ? volumes.first.id
+            : volumeForChapter(chapterId),
+    };
+    final next = manifest.copyWith(
+      volumes: volumes,
+      chapterVolumes: memberships,
+      chapterIds: _orderedChapters(manifest.chapterIds, volumes, memberships),
+    );
+    await _mutate({'work.json': WorkCodec.encodeManifest(next)});
+    manifest = next;
+  }
+
+  Future<void> updateDetails({
+    required String title,
+    required WorkDetails details,
+    List<int>? cover,
+    bool changeCover = false,
+  }) async {
+    final changes = <String, List<int>?>{};
+    String? coverFile;
+    if (changeCover && cover != null) {
+      coverFile = 'assets/covers/${RecordVersion.of(cover).hash}.png';
+      if (await store.read(coverFile) == null) changes[coverFile] = cover;
+    }
+    final next = manifest.copyWith(
+      title: title,
+      details: details,
+      coverFile: coverFile,
+      clearCover: changeCover && cover == null,
+    );
+    changes['work.json'] = WorkCodec.encodeManifest(next);
+    await _mutate(changes);
     manifest = next;
   }
 
@@ -294,6 +456,7 @@ class WorkHandle {
       };
       final next = manifest.copyWith(
         chapterIds: manifest.chapterIds.where((value) => value != id).toList(),
+        chapterVolumes: {...manifest.chapterVolumes}..remove(id),
       );
       await store.read('${_chapter(id)}.txt').then((raw) {
         if (raw != null) _versions['${_chapter(id)}.txt'] = raw.version;

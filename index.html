@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f0e7">
+  <meta name="description" content="InkFlow 是一间属于你的桌面写作书房。整理小说、人物与灵感，在喜欢的主题里，慢慢写出下一个故事。支持 macOS 与 Windows。">
+  <title>InkFlow · 给故事，一间安静的书房</title>
+  <link rel="icon" href="./website/assets/icon.png">
+  <link rel="stylesheet" href="./website/style.css">
+  <script src="./website/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="site-header wrap">
+    <a class="brand" href="#" aria-label="InkFlow 首页"><img src="./website/assets/icon.png" alt="" width="42" height="42"><span>InkFlow<span class="brand-cn">墨流</span></span></a>
+    <nav aria-label="主导航"><a href="#study">逛逛书房</a><a href="#updates">更新记录</a><a class="nav-download" href="#download">下载 InkFlow <span aria-hidden="true">↗</span></a></nav>
+  </header>
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow">把心里的世界，写成故事。</p>
+        <h1 id="hero-title">给故事，<br>一间安静的书房。</h1>
+        <p class="hero-description">从一闪而过的灵感，到最后一章。<br>在 InkFlow，找到属于自己的写作节奏。</p>
+        <a class="button primary" href="#download">把书房搬进电脑 <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="hero-visual" aria-label="小说写作场景演示">
+        <div class="manuscript">
+          <div class="manuscript-top"><span>山海来信</span><span>第一卷 · 风起时</span></div>
+          <p class="chapter-label">第三章</p><h2>风从旧书页间经过</h2>
+          <p>午后的光落在桌角，林夏翻开那本很久没有读完的书。一片叶子从书页间滑下来，像一封迟到了许多年的信。</p>
+          <p>窗外的风很轻，她忽然想起，那个故事还没有写完。<span class="caret" aria-hidden="true"></span></p>
+          <div class="manuscript-bottom"><span>故事，正在发生。</span><span aria-hidden="true">✧</span></div>
+        </div>
+        <div class="note-slip"><span>灵感手记</span><p>如果一封信，<br>能寄到过去呢？</p></div>
+        <p class="visual-caption">写作场景示意 · 示例文字</p>
+      </div>
+    </section>
+    <div class="intro-line wrap"><span>你的故事，自有章法。</span><span>本地作品 · 卷与章节 · 人物与灵感</span></div>
+    <section class="study-section wrap" id="study" aria-labelledby="study-title">
+      <div class="section-intro"><p class="eyebrow">写下去，也理得清</p><h2 id="study-title">让想象铺开，<br>让故事有迹可循。</h2><p>作品、章节、人物和伏笔，都有自己的位置。<br>把整理交给书房，把心思留给故事。</p></div>
+      <div class="study-grid">
+        <div class="outline-panel"><div class="panel-caption"><img src="./website/assets/icon.png" alt="" width="24" height="24"> 山海来信 <span>作品示例</span></div><div class="outline-body"><span class="outline-volume">⌄ 第一卷　风起时</span><span>第一章　旧巷的来客</span><span>第二章　没寄出的信</span><span class="selected">第三章　风从旧书页间经过 <small>正在写</small></span><span>第四章　另一座城</span><span class="outline-volume">› 第二卷　山海之间</span></div><div class="outline-tabs"><span>人物</span><span>大纲</span><span>灵感</span></div></div>
+        <div class="feature-notes"><article><span class="feature-mark">卷</span><div><h3>长篇，也能从容展开</h3><p>按卷和章节整理作品，让一部长篇的脉络，清清楚楚。</p></div></article><article><span class="feature-mark">人</span><div><h3>记住人物的每一面</h3><p>用人物、大纲与灵感笔记，接住那些暂时还没写进正文的想法。</p></div></article><article><span class="feature-mark">字</span><div><h3>留一点仪式感给落笔</h3><p>调整文字排版，看看写作统计，也可以为每次敲击配上喜欢的键音。</p></div></article></div>
+      </div>
+    </section>
+    <section class="theme-section" aria-labelledby="theme-title"><div class="wrap"><div class="section-intro"><p class="eyebrow">今天，想在哪里写？</p><h2 id="theme-title">换个风景，接着写。</h2><p>八种主题，从温暖书房到像素星夜。<br>这里先挑了四种，邀你坐一会儿。</p></div>
+      <div class="theme-picker" role="group" aria-label="切换写作场景主题"><button type="button" data-theme="paper" aria-pressed="true"><span class="swatch paper"></span>温暖书房</button><button type="button" data-theme="forest" aria-pressed="false"><span class="swatch forest"></span>雾林晨光</button><button type="button" data-theme="pixel" aria-pressed="false"><span class="swatch pixel"></span>像素原野</button><button type="button" data-theme="sakura" aria-pressed="false"><span class="swatch sakura"></span>樱下手札</button></div>
+      <div class="theme-stage" id="theme-stage" data-current="paper"><div class="demo-window"><div class="demo-toolbar"><span>山海来信 / 第一卷</span><span>写作场景演示</span></div><div class="demo-page"><p class="chapter-label">第三章</p><h3>风从旧书页间经过</h3><p>她把那片叶子放回书里，提笔写下第一行字。</p><p>“如果你也看见了这封信，就来山的另一边找我。”</p><p>窗外有鸟鸣。这个故事，终于有了新的开头。</p></div><div class="demo-status"><span id="theme-status" aria-live="polite">温暖书房 · 暖纸与细纤维</span><span>每一页，都靠近心里的世界</span></div></div></div>
+    </div></section>
+    <section class="keepsake wrap" aria-labelledby="keepsake-title"><div class="quote-paper"><p>“这个故事，<br>终于有了新的开头。”</p><span>《山海来信》· 示例摘录</span><div class="quote-brand">InkFlow</div></div><div class="keepsake-copy"><p class="eyebrow">写作之外，也照顾周全</p><h2 id="keepsake-title">好句子值得分享，<br>好故事值得留存。</h2><p>把喜欢的片段做成分享卡片。<br>导出 TXT，也为作品留一份备份。<br>从开始写，到带着文字离开，都从容一点。</p><p class="quiet-note">作品保存在本地。重要的文字，也记得定期备份。</p></div></section>
+    <section class="download-section wrap" id="download" aria-labelledby="download-title"><div class="download-heading"><img src="./website/assets/icon.png" alt="" width="72" height="72"><div><h2 id="download-title">下一章，在你的书房见。</h2><p>InkFlow 桌面版 · macOS / Windows</p></div></div><p id="release-status" class="release-status" role="status">正在查看可用版本…</p><div id="downloads" class="downloads" aria-label="桌面版下载"></div><div id="latest-notes" class="latest-notes"></div><noscript><p>请启用 JavaScript 以获取最新下载地址和更新记录。</p></noscript><p class="download-help">Mac 可在“关于本机”查看芯片；Windows 可在“系统 → 系统信息”查看系统类型。请选择与你电脑匹配的安装包。</p></section>
+    <section class="updates-section wrap" id="updates" aria-labelledby="updates-title"><div class="updates-heading"><h2 id="updates-title">书房近况</h2><button type="button" id="refresh-releases" class="text-button">重新检查 <span aria-hidden="true">↻</span></button></div><p>每一次打磨，都记在这里。下载新版前，可以先看看更新内容。</p><div id="release-history" aria-live="polite"><p class="empty-message">正在读取更新记录…</p></div></section>
+  </main>
+  <footer class="site-footer wrap"><a class="brand" href="#"><img src="./website/assets/icon.png" alt="" width="32" height="32"><span>InkFlow</span></a><p>愿你落笔有声，故事有光。</p><a href="#main">回到开篇 ↑</a></footer>
+</body>
+</html>

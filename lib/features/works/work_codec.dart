@@ -22,10 +22,51 @@ class WorkCodec {
     if (ids.any((id) => !validId(id)) || ids.toSet().length != ids.length) {
       throw const FormatException('章节标识不合法或重复，原文件已保留');
     }
+    List<WorkVolume>? volumes;
+    final rawVolumes = json['volumes'];
+    if (rawVolumes != null) {
+      if (rawVolumes is! List ||
+          rawVolumes.isEmpty ||
+          rawVolumes.any(
+            (value) =>
+                value is! Map<String, dynamic> ||
+                !validId(value['id']) ||
+                value['title'] is! String,
+          )) {
+        throw const FormatException('卷信息损坏，原文件已保留');
+      }
+      volumes = rawVolumes
+          .map((value) => WorkVolume(id: value['id'], title: value['title']))
+          .toList();
+      if (volumes.map((v) => v.id).toSet().length != volumes.length) {
+        throw const FormatException('卷标识重复，原文件已保留');
+      }
+    }
+    final memberships = json['chapterVolumes'] ?? <String, dynamic>{};
+    final volumeIds =
+        volumes?.map((v) => v.id).toSet() ?? {json['workId'] as String};
+    if (memberships is! Map<String, dynamic> ||
+        memberships.entries.any(
+          (entry) =>
+              !ids.contains(entry.key) ||
+              !validId(entry.value) ||
+              !volumeIds.contains(entry.value),
+        )) {
+      throw const FormatException('章节分卷信息损坏，原文件已保留');
+    }
+    if (json['coverFile'] != null && !validCoverFile(json['coverFile'])) {
+      throw const FormatException('作品封面路径不合法');
+    }
     return WorkManifest(
+      details: WorkDetails.fromJson(json['details']),
+      coverFile: json['coverFile'] as String?,
       workId: json['workId'],
       title: json['title'],
       chapterIds: List<String>.unmodifiable(ids),
+      volumes: volumes == null ? null : List.unmodifiable(volumes),
+      chapterVolumes: Map<String, String>.unmodifiable(
+        memberships.cast<String, String>(),
+      ),
     );
   }
 

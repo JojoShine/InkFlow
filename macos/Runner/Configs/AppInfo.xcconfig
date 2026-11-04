@@ -8,7 +8,7 @@
 PRODUCT_NAME = inkflow
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = dev.inkflow.inkflow
+PRODUCT_BUNDLE_IDENTIFIER = me.tbtparent.inkflow
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 dev.inkflow. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 tbtparent. All rights reserved.

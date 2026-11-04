@@ -43,3 +43,25 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local signing material and generated release files
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.pem
+*.key
+*.private
+windows/runner/update_public_key.rc
+release-output/
+.superpowers/
+docs/verification/*-before.txt
+docs/verification/*-after.txt
+docs/verification/*-before.json
+docs/verification/*-after.json
+
+__pycache__/
+*.pyc
+/release-preview/
+/dist/

@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "dev.inkflow" "\0"
+            VALUE "CompanyName", "me.tbtparent.inkflow" "\0"
             VALUE "FileDescription", "inkflow" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "inkflow" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 dev.inkflow. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 me.tbtparent.inkflow. All rights reserved." "\0"
             VALUE "OriginalFilename", "inkflow.exe" "\0"
             VALUE "ProductName", "inkflow" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

@@ -42,6 +42,9 @@ dependencies:
   archive: ^3.3.2
   ffi: ^2.2.0
   window_manager: 0.5.1
+  screen_retriever: 0.2.2
+  auto_updater: ^1.0.0
+  package_info_plus: ^9.0.0
 
 dev_dependencies:
   flutter_test:
@@ -67,6 +70,16 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - assets/themes/forest.png
+    - assets/themes/coast.png
+    - assets/themes/rain.png
+    - assets/themes/pixel_meadow.png
+    - assets/themes/pixel_starlight.png
+    - assets/themes/sakura.png
+    - assets/sounds/soft.wav
+    - assets/sounds/mechanical.wav
+    - assets/sounds/typewriter.wav
 
   # To add assets to your application, add an assets section, like this:
   # assets:
