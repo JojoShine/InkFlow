@@ -6,7 +6,7 @@
 
 | 类别 | Secrets 名称 | 内容 |
 | --- | --- | --- |
-| Mac 开发者签名 | `MACOS_CERTIFICATE_P12` | Developer ID Application 证书连同私钥导出的 `.p12`，填 base64 内容；仅 `.cer` 不够，不是 Apple Development 或 App Store 证书。需要有效 Apple Developer Program 资格。 |
+| Mac 开发者签名 | `MACOS_CERTIFICATE_P12` | Developer ID Application 证书连同私钥导出的 `.p12`，填单行 base64 内容；仅 `.cer` 不够，不是 Apple Development 或 App Store 证书。需要有效 Apple Developer Program 资格。 |
 | 证书解密 | `MACOS_CERTIFICATE_PASSWORD` | 导出上述 p12 时设定的密码。 |
 | 签名身份 | `MACOS_SIGN_IDENTITY` | 完整证书名称，如 `Developer ID Application: Your Name (TEAMID)`。 |
 | Apple 公证 | `APPLE_ID` | 有权使用该开发团队的 Apple ID 邮箱。 |
@@ -31,7 +31,7 @@
 
 当前自动更新必需的是上述 DSA 更新签名。Windows 安装器 Authenticode 签名另行处理：
 
-- 已有可导出的 PFX：配置 `WINDOWS_CERTIFICATE_PFX`（base64）与 `WINDOWS_CERTIFICATE_PASSWORD`。
+- 已有可导出的 PFX：配置 `WINDOWS_CERTIFICATE_PFX`（单行 base64）与 `WINDOWS_CERTIFICATE_PASSWORD`。
 - 若证书使用云签名或硬件令牌，提供供应商和签名方式的名称即可，流水线需要对应适配，不要导出不可导出的私钥。
 - 没有此证书，仍可编译 Windows 并用 DSA 校验更新，但不能宣称安装器有受信任的发布者签名。
 
