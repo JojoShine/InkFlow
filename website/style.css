@@ -69,3 +69,6 @@ body{background-color:var(--paper)}
 .download-item{background:url('./assets/paper-grain.svg'),#fdfcf8;border-color:#e3e6da}
 @media(min-width:1400px){.hero{padding-block:90px 112px}}
 @media(max-width:767px){.hero{padding-block:48px 70px}.hero h1{letter-spacing:.5px;line-height:1.6}.hero-visual{margin-top:6px}}
+/* Keep natural page scrolling without a visible scrollbar. */
+html,body{scrollbar-width:none;-ms-overflow-style:none}
+html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}

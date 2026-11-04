@@ -10,6 +10,13 @@ void main() {
     expect(() => TextTransfer.decode([0xc3]), throwsFormatException);
   });
   test('strict GB18030 supports four-byte supplementary characters', () {
+    if (!Platform.isMacOS && !Platform.isWindows) {
+      expect(
+        () => TextTransfer.decode([0xd6, 0xd0], encoding: 'gb18030'),
+        throwsUnsupportedError,
+      );
+      return;
+    }
     expect(
       TextTransfer.decode([
         0xd6,

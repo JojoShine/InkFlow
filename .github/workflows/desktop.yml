@@ -3,6 +3,7 @@ on:
   push:
     branches: ['**']
     tags: ['v*']
+    paths-ignore: ['website/**', 'index.html', '**/*.md']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -24,6 +25,7 @@ jobs:
           cache: true
       - run: flutter pub get --enforce-lockfile
       - run: flutter analyze
+      - run: node --check website/app.js
       - run: flutter test
       - run: python3 -m unittest discover -s tool/release -v
       - name: Validate release tag
@@ -59,6 +61,8 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install -r tool/release/requirements.txt
       - run: flutter pub get --enforce-lockfile
+      - name: Test platform text decoding
+        run: flutter test test/transfer/text_transfer_test.dart
       - name: Configure public update keys
         env:
           MACOS_ED25519_PUBLIC_KEY: ${{ secrets.MACOS_ED25519_PUBLIC_KEY }}
