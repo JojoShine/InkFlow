@@ -209,14 +209,14 @@ class _NotesPanelState extends State<NotesPanel> {
                         note.title,
                         style: const TextStyle(fontSize: 15, height: 1.5),
                       ),
-                      if ((note.summary.isNotEmpty ? note.summary : note.body)
-                          .isNotEmpty)
+                      for (final content in [
+                        note.summary,
+                        note.body,
+                      ].where((content) => content.isNotEmpty))
                         Padding(
                           padding: const EdgeInsets.only(top: 5),
                           child: Text(
-                            note.summary.isNotEmpty ? note.summary : note.body,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                            content,
                             style: TextStyle(
                               fontSize: 12,
                               color: colors.muted,
