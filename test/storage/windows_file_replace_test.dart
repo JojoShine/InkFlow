@@ -5,6 +5,8 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkflow/core/storage/local_file_store.dart';
 import 'package:inkflow/core/storage/record_store.dart';
+import 'package:inkflow/core/storage/history_store.dart';
+import 'package:inkflow/core/storage/recovery_store.dart';
 
 void main() {
   late Directory root;
@@ -139,5 +141,36 @@ void main() {
       expect(await original.readAsString(), '新稿');
     },
     skip: !Platform.isWindows,
+  );
+  test(
+    'realistic work and chapter IDs can save local history and recovery under a Chinese user path',
+    () async {
+      final data = Directory(
+        '${root.path}/中文用户/AppData/Roaming/me.tbtparent.inkflow/inkflow',
+      );
+      final workKey = List.filled(64, 'a').join();
+      final chapterId = List.filled(32, 'b').join();
+      final history = HistoryStore(data);
+      await history.capture(
+        workKey,
+        chapterId,
+        utf8.encode('中文历史记录'),
+        DateTime.utc(2026, 11, 5),
+      );
+      final entries = await history.list(workKey, chapterId);
+      expect(entries, hasLength(1));
+      expect(entries.single.path.length + 37, greaterThan(260));
+      expect(utf8.decode(await history.read(entries.single)), '中文历史记录');
+      final recovery = RecoveryStore(data);
+      await recovery.writeSession(
+        workKey,
+        SessionRecovery(
+          chapterId: chapterId,
+          text: '未保存草稿',
+          baseHash: List.filled(64, 'c').join(),
+        ),
+      );
+      expect((await recovery.readSession(workKey, chapterId))!.text, '未保存草稿');
+    },
   );
 }
