@@ -13,6 +13,7 @@ Add-Type @'
 using System;
 using System.Text;
 using System.Runtime.InteropServices;
+using System.ComponentModel;
 public static class ManuscriptProbe {
   public delegate bool EnumProc(IntPtr h, IntPtr p);
   [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr h, EnumProc p, IntPtr l);
@@ -21,6 +22,62 @@ public static class ManuscriptProbe {
   [DllImport("user32.dll", EntryPoint="SendMessageW")] public static extern IntPtr Message(IntPtr h, uint m, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Rect r);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr VirtualAllocEx(IntPtr process, IntPtr address, UIntPtr size, uint type, uint protect);
+  [DllImport("kernel32.dll")] static extern bool VirtualFreeEx(IntPtr process, IntPtr address, UIntPtr size, uint type);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool WriteProcessMemory(IntPtr process, IntPtr address, byte[] bytes, UIntPtr size, out UIntPtr written);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool ReadProcessMemory(IntPtr process, IntPtr address, byte[] bytes, UIntPtr size, out UIntPtr read);
+  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+  [DllImport("user32.dll", SetLastError=true)] static extern bool OpenClipboard(IntPtr owner);
+  [DllImport("user32.dll")] static extern bool EmptyClipboard();
+  [DllImport("user32.dll")] static extern bool CloseClipboard();
+  [DllImport("user32.dll", SetLastError=true)] static extern IntPtr SetClipboardData(uint format, IntPtr memory);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern uint RegisterClipboardFormat(string name);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr GlobalAlloc(uint flags, UIntPtr size);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr GlobalLock(IntPtr memory);
+  [DllImport("kernel32.dll")] static extern bool GlobalUnlock(IntPtr memory);
+  [DllImport("kernel32.dll")] static extern IntPtr GlobalFree(IntPtr memory);
+  public static int[] Paragraph(IntPtr editor, int pid) {
+    IntPtr process=OpenProcess(0x38,false,pid);
+    if (process==IntPtr.Zero) throw new Win32Exception();
+    IntPtr memory=IntPtr.Zero;
+    try {
+      // EM_GETPARAFORMAT is a WM_USER message, so its structure needs memory
+      // in the fixture process rather than a pointer into the test process.
+      memory=VirtualAllocEx(process,IntPtr.Zero,(UIntPtr)188,0x3000,4);
+      if (memory==IntPtr.Zero) throw new Win32Exception();
+      byte[] bytes=new byte[188]; BitConverter.GetBytes(188).CopyTo(bytes,0);
+      UIntPtr count;
+      if (!WriteProcessMemory(process,memory,bytes,(UIntPtr)bytes.Length,out count) || count.ToUInt64()!=188) throw new Win32Exception();
+      Message(editor,0x43d,IntPtr.Zero,memory);
+      if (!ReadProcessMemory(process,memory,bytes,(UIntPtr)bytes.Length,out count) || count.ToUInt64()!=188) throw new Win32Exception();
+      return new int[] {bytes[170],BitConverter.ToInt32(bytes,164),BitConverter.ToInt32(bytes,160),BitConverter.ToInt32(bytes,12),BitConverter.ToInt32(bytes,20)};
+    } finally {
+      if (memory!=IntPtr.Zero) VirtualFreeEx(process,memory,UIntPtr.Zero,0x8000);
+      CloseHandle(process);
+    }
+  }
+  static void ClipboardFormat(uint format, byte[] bytes) {
+    IntPtr memory=GlobalAlloc(2,(UIntPtr)bytes.Length);
+    if (memory==IntPtr.Zero) throw new Win32Exception();
+    try {
+      IntPtr address=GlobalLock(memory);
+      if (address==IntPtr.Zero) throw new Win32Exception();
+      Marshal.Copy(bytes,0,address,bytes.Length); GlobalUnlock(memory);
+      if (SetClipboardData(format,memory)==IntPtr.Zero) throw new Win32Exception();
+      memory=IntPtr.Zero;
+    } finally { if (memory!=IntPtr.Zero) GlobalFree(memory); }
+  }
+  public static void PlainAndRichClipboard(IntPtr owner, string plain) {
+    if (!OpenClipboard(owner)) throw new Win32Exception();
+    try {
+      if (!EmptyClipboard()) throw new Win32Exception();
+      ClipboardFormat(13,Encoding.Unicode.GetBytes(plain+"\0"));
+      ClipboardFormat(RegisterClipboardFormat("Rich Text Format"),Encoding.ASCII.GetBytes("{\\rtf1\\ansi\\b RICH_TEXT_MUST_NOT_BE_PASTED}\0"));
+    } finally { CloseClipboard(); }
+  }
   public struct Rect { public int Left, Top, Right, Bottom; }
 }
 '@
@@ -33,6 +90,12 @@ function Read-Editor($editor) {
   $content = [Text.StringBuilder]::new(4096)
   [ManuscriptProbe]::SendMessage($editor,13,[IntPtr]4096,$content) | Out-Null
   return $content.ToString().Replace("`r",'')
+}
+function Assert-Paragraph($editor,$pidValue) {
+  $format=[ManuscriptProbe]::Paragraph($editor,$pidValue)
+  if ($format[0] -ne 4 -or $format[1] -ne 540 -or $format[2] -ne 120 -or $format[3] -ne 600 -or $format[4] -ne -600) {
+    throw "Manuscript paragraph formatting changed: $format"
+  }
 }
 function Assert-Rendering($window,$editor,$name,$expected) {
   $frame = [ManuscriptProbe+Rect]::new(); $body = [ManuscriptProbe+Rect]::new()
@@ -90,6 +153,7 @@ foreach ($theme in @('paper','forest','night')) {
     if ($editors.Count -ne 1) { throw 'Expected one native manuscript editor.' }
     $editor=$editors[0]
     if ((Read-Editor $editor) -ne $text) { throw 'Loaded manuscript differs from fixture.' }
+    Assert-Paragraph $editor $process.Id
     Assert-Rendering $window $editor $theme $expected
     [ManuscriptProbe]::Message($editor,0xb1,[IntPtr]0x7fffffff,[IntPtr]0x7fffffff) | Out-Null
     [ManuscriptProbe]::Message($editor,0x102,[IntPtr]([int][char]'X'),[IntPtr]::Zero) | Out-Null
@@ -97,6 +161,34 @@ foreach ($theme in @('paper','forest','night')) {
     if ((Read-Editor $editor) -ne ($text+'X')) { throw 'Native text input did not update the manuscript.' }
     if ([IO.File]::ReadAllText($chapter) -ne ($text+'X')) { throw 'Native text input did not save to the work folder.' }
     Assert-Rendering $window $editor "$theme-after-input" $expected
+    $body=[ManuscriptProbe+Rect]::new()
+    [ManuscriptProbe]::GetWindowRect($editor,[ref]$body) | Out-Null
+    [ManuscriptProbe]::SetCursorPos($body.Left+130,$body.Top+14) | Out-Null
+    [ManuscriptProbe]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
+    [ManuscriptProbe]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+    [ManuscriptProbe]::Message($editor,0xb1,[IntPtr]0x7fffffff,[IntPtr]0x7fffffff) | Out-Null
+    foreach ($character in ("`r连续输入验证").ToCharArray()) {
+      [ManuscriptProbe]::Message($editor,0x102,[IntPtr]([int][char]$character),[IntPtr]::Zero) | Out-Null
+      Assert-Paragraph $editor $process.Id
+      $selection=[ManuscriptProbe]::Message($editor,0xb0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
+      if (($selection -band 65535) -ne (($selection -shr 16) -band 65535)) { throw 'Typing left the manuscript selected.' }
+      Start-Sleep -Milliseconds 35
+    }
+    $beforePaste=$text+"X`n连续输入验证"
+    $plainPaste="`n粘贴后保留行高"
+    [ManuscriptProbe]::PlainAndRichClipboard($window,$plainPaste)
+    [ManuscriptProbe]::Message($editor,0x302,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+    if ((Read-Editor $editor) -ne ($beforePaste+$plainPaste)) { throw 'Paste did not preserve plain text.' }
+    Assert-Paragraph $editor $process.Id
+    [ManuscriptProbe]::Message($editor,0xc7,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+    if ((Read-Editor $editor) -ne $beforePaste) { throw 'Undo did not restore the text before paste.' }
+    [ManuscriptProbe]::Message($editor,0x454,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+    if ((Read-Editor $editor) -ne ($beforePaste+$plainPaste)) { throw 'Redo did not restore the pasted plain text.' }
+    Assert-Paragraph $editor $process.Id
+    Start-Sleep -Seconds 3
+    if ([IO.File]::ReadAllText($chapter) -ne ($beforePaste+$plainPaste)) { throw 'Continued input and paste were not saved as plain text.' }
+    Assert-Rendering $window $editor "$theme-after-newline-paste-undo" $expected
+    Write-Output "$theme preserves line spacing, paragraph spacing, indentation, plain paste and undo."
   } finally {
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 1

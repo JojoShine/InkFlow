@@ -45,10 +45,6 @@ std::string Utf8(const std::wstring& text) {
                       result.data(), length, nullptr, nullptr);
   return result;
 }
-void TraceCount(HWND window, const wchar_t* name) {
-  const auto count = reinterpret_cast<uintptr_t>(GetPropW(window, name));
-  SetPropW(window, name, reinterpret_cast<HANDLE>(count + 1));
-}
 COLORREF Color(double value) {
   auto argb = static_cast<uint32_t>(value);
   return RGB((argb >> 16) & 255, (argb >> 8) & 255, argb & 255);
@@ -187,7 +183,9 @@ void NativeNovelEditor::Create() {
     ES_MULTILINE | ES_WANTRETURN | ES_AUTOVSCROLL | ES_NOHIDESEL | WS_VSCROLL,
     0, 0, 1, 1, parent_, nullptr, GetModuleHandle(nullptr), nullptr);
   if (!editor_) return;
-  SendMessage(editor_, EM_SETTEXTMODE, TM_PLAINTEXT | TM_MULTILEVELUNDO | TM_MULTICODEPAGE, 0);
+  // RichEdit plain mode rejects paragraph spacing. File I/O and paste remain
+  // plain text; rich mode is used only for the manuscript's display layout.
+  SendMessage(editor_, EM_SETTEXTMODE, TM_RICHTEXT | TM_MULTILEVELUNDO | TM_MULTICODEPAGE, 0);
   SendMessage(editor_, EM_EXLIMITTEXT, 0, 0x7fffffff);
   SendMessage(editor_, EM_SETEVENTMASK, 0, ENM_CHANGE | ENM_SELCHANGE | ENM_SCROLL);
   SendMessage(editor_, EM_SHOWSCROLLBAR, SB_VERT, FALSE);
@@ -222,12 +220,10 @@ std::wstring NativeNovelEditor::Text() {
 }
 
 void NativeNovelEditor::Load(const Map& args) {
-  TraceCount(editor_, L"inkflow.load");
   auto text = Wide(String(args, "text"));
   auto id = String(args, "documentId");
   document_generation_ = static_cast<int>(Number(args, "documentGeneration", 0));
   const bool changed = text != Text() || id != document_id_;
-  if (changed) TraceCount(editor_, L"inkflow.changed_load");
   loading_ = true;
   if (changed) {
     std::replace(text.begin(), text.end(), L'\n', L'\r');
@@ -248,7 +244,6 @@ void NativeNovelEditor::Load(const Map& args) {
 }
 
 void NativeNovelEditor::Configure(const Map& args) {
-  TraceCount(editor_, L"inkflow.configure");
   configuration_ = args;
   if (composing_) { configuration_pending_ = true; return; }
   configuration_pending_ = false;
@@ -263,7 +258,10 @@ void NativeNovelEditor::Configure(const Map& args) {
     rich->QueryInterface(__uuidof(ITextDocument), reinterpret_cast<void**>(&document));
     rich->Release();
   }
-  if (document) document->Undo(tomSuspend, &ignored);
+  if (document) {
+    document->Freeze(&ignored);
+    document->Undo(tomSuspend, &ignored);
+  }
   auto size = Number(args, "fontSize", 20);
   CHARFORMAT2W character = {};
   character.cbSize = sizeof(character);
@@ -285,16 +283,15 @@ void NativeNovelEditor::Configure(const Map& args) {
   paragraph.dySpaceAfter = static_cast<LONG>(Number(args, "paragraphGap", 8) * 15);
   paragraph.bLineSpacingRule = 4;
   paragraph.dyLineSpacing = static_cast<LONG>(size * Number(args, "lineHeight", 1.8) * 15);
-  const auto paragraph_result = SendMessage(editor_, EM_SETPARAFORMAT, 0, reinterpret_cast<LPARAM>(&paragraph));
-  SetPropW(editor_, L"inkflow.para_result", reinterpret_cast<HANDLE>(paragraph_result));
-  PARAFORMAT2 actual = {}; actual.cbSize = sizeof(actual);
-  SendMessage(editor_, EM_GETPARAFORMAT, 0, reinterpret_cast<LPARAM>(&actual));
-  SetPropW(editor_, L"inkflow.line_spacing", reinterpret_cast<HANDLE>(static_cast<intptr_t>(actual.dyLineSpacing)));
-  SetPropW(editor_, L"inkflow.line_rule", reinterpret_cast<HANDLE>(static_cast<intptr_t>(actual.bLineSpacingRule)));
+  SendMessage(editor_, EM_SETPARAFORMAT, 0, reinterpret_cast<LPARAM>(&paragraph));
   SendMessage(editor_, EM_SETBKGNDCOLOR, 0, Color(Number(args, "backgroundColor", 0xfffffdf8)));
   SendMessage(editor_, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&selection));
-  if (document) { document->Undo(tomResume, &ignored); document->Release(); }
   ApplyTextInsets();
+  if (document) {
+    document->Undo(tomResume, &ignored);
+    document->Unfreeze(&ignored);
+    document->Release();
+  }
   loading_ = false;
   ScheduleScroll();
 }
@@ -387,42 +384,6 @@ bool NativeNovelEditor::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam
 LRESULT CALLBACK NativeNovelEditor::EditorProc(HWND window, UINT message, WPARAM wparam,
                                                LPARAM lparam, UINT_PTR, DWORD_PTR data) {
   auto* self = reinterpret_cast<NativeNovelEditor*>(data);
-  if (message == WM_APP + 12) {
-    IRichEditOle* rich = nullptr;
-    ITextDocument* document = nullptr;
-    ITextRange* range = nullptr;
-    ITextPara* para = nullptr;
-    SendMessage(window, EM_GETOLEINTERFACE, 0, reinterpret_cast<LPARAM>(&rich));
-    HRESULT status = E_FAIL;
-    if (rich) {
-      status = rich->QueryInterface(__uuidof(ITextDocument), reinterpret_cast<void**>(&document));
-      rich->Release();
-    }
-    if (document) { status = document->Range(0, 0x7fffffff, &range); document->Release(); }
-    if (range) { status = range->GetPara(&para); range->Release(); }
-    if (para) {
-      status = para->SetLineSpacing(tomLineSpaceExactly, 27.0f);
-      para->Release();
-    }
-    SetPropW(window, L"inkflow.tom_status", reinterpret_cast<HANDLE>(static_cast<intptr_t>(status)));
-    PARAFORMAT2 actual = {}; actual.cbSize = sizeof(actual);
-    SendMessage(window, EM_GETPARAFORMAT, 0, reinterpret_cast<LPARAM>(&actual));
-    SetPropW(window, L"inkflow.tom_spacing", reinterpret_cast<HANDLE>(static_cast<intptr_t>(actual.dyLineSpacing)));
-    SetPropW(window, L"inkflow.tom_rule", reinterpret_cast<HANDLE>(static_cast<intptr_t>(actual.bLineSpacingRule)));
-    return 1;
-  }
-  if (message == EM_EXSETSEL) {
-    const auto* range = reinterpret_cast<const CHARRANGE*>(lparam);
-    if (range && range->cpMin == 0 && range->cpMax == -1) TraceCount(window, L"inkflow.select_all");
-  }
-  if (message == EM_SETSEL && wparam == 0 && lparam == -1) TraceCount(window, L"inkflow.select_all");
-  if (message == WM_IME_ENDCOMPOSITION) TraceCount(window, L"inkflow.ime_end");
-  if (message == WM_SETFOCUS) TraceCount(window, L"inkflow.focus");
-  if (message == WM_KILLFOCUS) TraceCount(window, L"inkflow.blur");
-  if (message == WM_PAINT) {
-    CHARRANGE selected; SendMessage(window, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&selected));
-    if (selected.cpMin == 0 && selected.cpMax > 0) TraceCount(window, L"inkflow.selected_paint");
-  }
   if (message == WM_TIMER && wparam == 0x494e) {
     KillTimer(window, 0x494e); self->scroll_pending_ = false; self->EmitScroll(); return 0;
   }
@@ -465,10 +426,15 @@ LRESULT CALLBACK NativeNovelEditor::EditorProc(HWND window, UINT message, WPARAM
     }
   }
   const auto old_origin = self->input_origin_;
-  if (message == WM_PASTE || (message == WM_KEYDOWN && wparam == 'V' && (GetKeyState(VK_CONTROL) & 0x8000))) self->input_origin_ = "paste";
+  const bool paste = message == WM_PASTE ||
+      (message == WM_KEYDOWN && wparam == 'V' && (GetKeyState(VK_CONTROL) & 0x8000)) ||
+      (message == WM_KEYDOWN && wparam == VK_INSERT && (GetKeyState(VK_SHIFT) & 0x8000));
+  if (paste) self->input_origin_ = "paste";
   if (message == WM_UNDO || message == EM_UNDO || (message == WM_KEYDOWN && wparam == 'Z' && (GetKeyState(VK_CONTROL) & 0x8000))) self->input_origin_ = "undo";
   if (message == EM_REDO || (message == WM_KEYDOWN && wparam == 'Y' && (GetKeyState(VK_CONTROL) & 0x8000))) self->input_origin_ = "redo";
-  const auto result = DefSubclassProc(window, message, wparam, lparam);
+  const auto result = paste
+      ? DefSubclassProc(window, EM_PASTESPECIAL, CF_UNICODETEXT, 0)
+      : DefSubclassProc(window, message, wparam, lparam);
   self->input_origin_ = old_origin;
   if (message == WM_SIZE) { self->ApplyTextInsets(); self->ScheduleScroll(); }
   if (message == WM_IME_ENDCOMPOSITION) {
