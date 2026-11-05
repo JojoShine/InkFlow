@@ -183,7 +183,9 @@ void NativeNovelEditor::Create() {
     ES_MULTILINE | ES_WANTRETURN | ES_AUTOVSCROLL | ES_NOHIDESEL | WS_VSCROLL,
     0, 0, 1, 1, parent_, nullptr, GetModuleHandle(nullptr), nullptr);
   if (!editor_) return;
-  SendMessage(editor_, EM_SETTEXTMODE, TM_PLAINTEXT | TM_MULTILEVELUNDO | TM_MULTICODEPAGE, 0);
+  // RichEdit plain mode rejects paragraph spacing. File I/O and paste remain
+  // plain text; rich mode is used only for the manuscript's display layout.
+  SendMessage(editor_, EM_SETTEXTMODE, TM_RICHTEXT | TM_MULTILEVELUNDO | TM_MULTICODEPAGE, 0);
   SendMessage(editor_, EM_EXLIMITTEXT, 0, 0x7fffffff);
   SendMessage(editor_, EM_SETEVENTMASK, 0, ENM_CHANGE | ENM_SELCHANGE | ENM_SCROLL);
   SendMessage(editor_, EM_SHOWSCROLLBAR, SB_VERT, FALSE);
@@ -256,7 +258,10 @@ void NativeNovelEditor::Configure(const Map& args) {
     rich->QueryInterface(__uuidof(ITextDocument), reinterpret_cast<void**>(&document));
     rich->Release();
   }
-  if (document) document->Undo(tomSuspend, &ignored);
+  if (document) {
+    document->Freeze(&ignored);
+    document->Undo(tomSuspend, &ignored);
+  }
   auto size = Number(args, "fontSize", 20);
   CHARFORMAT2W character = {};
   character.cbSize = sizeof(character);
@@ -281,8 +286,12 @@ void NativeNovelEditor::Configure(const Map& args) {
   SendMessage(editor_, EM_SETPARAFORMAT, 0, reinterpret_cast<LPARAM>(&paragraph));
   SendMessage(editor_, EM_SETBKGNDCOLOR, 0, Color(Number(args, "backgroundColor", 0xfffffdf8)));
   SendMessage(editor_, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&selection));
-  if (document) { document->Undo(tomResume, &ignored); document->Release(); }
   ApplyTextInsets();
+  if (document) {
+    document->Undo(tomResume, &ignored);
+    document->Unfreeze(&ignored);
+    document->Release();
+  }
   loading_ = false;
   ScheduleScroll();
 }
@@ -407,6 +416,25 @@ LRESULT CALLBACK NativeNovelEditor::EditorProc(HWND window, UINT message, WPARAM
       self->channel_->InvokeMethod("fileAction", std::make_unique<Value>(std::string(action))); return 0;
     }
   }
+  // Rich mode supplies paragraph layout, but the application's preferences
+  // remain the authority for formatting. Keep editing and IME shortcuts intact.
+  if ((message == WM_KEYDOWN || message == WM_CHAR) &&
+      (GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000)) {
+    auto key = wparam;
+    if (message == WM_CHAR && key >= 1 && key <= 26) {
+      const auto letter = static_cast<int>('A' + key - 1);
+      if (GetKeyState(letter) & 0x8000) key = static_cast<WPARAM>(letter);
+    }
+    const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    if (key == '1' || key == '2' || key == '5' || key == 'E' || key == 'J' ||
+        key == 'L' || key == 'R' || key == 'Q' || key == 'B' || key == 'U' ||
+        key == VK_OEM_PLUS || (shift &&
+        (key == 'A' || key == VK_OEM_COMMA || key == VK_OEM_PERIOD))) return 0;
+  }
+  if ((message == WM_KEYDOWN || message == WM_SYSKEYDOWN) && wparam == VK_OEM_PLUS &&
+      (GetKeyState(VK_MENU) & 0x8000) && !(GetKeyState(VK_CONTROL) & 0x8000)) return 0;
+  if (message == WM_SYSCHAR && (wparam == '=' || wparam == '+') &&
+      !(GetKeyState(VK_CONTROL) & 0x8000)) return 0;
   if (message == WM_KEYDOWN && wparam == VK_ESCAPE && !self->composing_) {
     self->channel_->InvokeMethod("exitFocus", nullptr); return 0;
   }
@@ -417,10 +445,15 @@ LRESULT CALLBACK NativeNovelEditor::EditorProc(HWND window, UINT message, WPARAM
     }
   }
   const auto old_origin = self->input_origin_;
-  if (message == WM_PASTE || (message == WM_KEYDOWN && wparam == 'V' && (GetKeyState(VK_CONTROL) & 0x8000))) self->input_origin_ = "paste";
+  const bool paste = message == WM_PASTE ||
+      (message == WM_KEYDOWN && wparam == 'V' && (GetKeyState(VK_CONTROL) & 0x8000)) ||
+      (message == WM_KEYDOWN && wparam == VK_INSERT && (GetKeyState(VK_SHIFT) & 0x8000));
+  if (paste) self->input_origin_ = "paste";
   if (message == WM_UNDO || message == EM_UNDO || (message == WM_KEYDOWN && wparam == 'Z' && (GetKeyState(VK_CONTROL) & 0x8000))) self->input_origin_ = "undo";
   if (message == EM_REDO || (message == WM_KEYDOWN && wparam == 'Y' && (GetKeyState(VK_CONTROL) & 0x8000))) self->input_origin_ = "redo";
-  const auto result = DefSubclassProc(window, message, wparam, lparam);
+  const auto result = paste
+      ? DefSubclassProc(window, EM_PASTESPECIAL, CF_UNICODETEXT, 0)
+      : DefSubclassProc(window, message, wparam, lparam);
   self->input_origin_ = old_origin;
   if (message == WM_SIZE) { self->ApplyTextInsets(); self->ScheduleScroll(); }
   if (message == WM_IME_ENDCOMPOSITION) {

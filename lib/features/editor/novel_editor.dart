@@ -368,9 +368,12 @@ class _NovelEditorState extends State<NovelEditor> with WidgetsBindingObserver {
       widget.session.controller.addListener(_sendDocument);
       _sendDocument();
     }
-    if (oldWidget.layout != widget.layout ||
-        oldWidget.textColor != widget.textColor ||
-        oldWidget.backgroundColor != widget.backgroundColor) {
+    // Theme interpolation can change float colors without changing the 8-bit
+    // colors sent to native editors. Avoid reformatting on those idle frames.
+    if (!mapEquals(oldWidget.layout.toJson(), widget.layout.toJson()) ||
+        oldWidget.textColor.toARGB32() != widget.textColor.toARGB32() ||
+        oldWidget.backgroundColor.toARGB32() !=
+            widget.backgroundColor.toARGB32()) {
       _channel?.invokeMethod<void>('configure', _configuration);
     }
   }
