@@ -14,6 +14,8 @@ public static class NativeProbe {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int n);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool RedrawWindow(IntPtr h, IntPtr r, IntPtr region, uint flags);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int command);
   public struct Rect { public int Left, Top, Right, Bottom; }
 }
 '@
@@ -70,6 +72,24 @@ foreach ($theme in @('paper','forest','night')) {
     Write-Output "Theme: $theme"
     $editor | ConvertTo-Json -Depth 5 | Write-Output
     if ($editor.Count -ne 1 -or $editor[0].text.Replace("`r",'') -ne $text) { throw 'Native manuscript text does not match fixture' }
+    $edit = [IntPtr]$editor[0].handle
+    foreach ($stage in @('redraw','color','isolated')) {
+      if ($stage -eq 'color') {
+        $previous = [NativeProbe]::Message($edit,0x443,[IntPtr]::Zero,[IntPtr]0x00ff00ff)
+        Write-Output "Previous background: $($previous.ToInt64().ToString('x'))"
+      }
+      if ($stage -eq 'isolated') {
+        $flutter = $children | Where-Object { $_.class -eq 'FLUTTERVIEW' } | Select-Object -First 1
+        [NativeProbe]::ShowWindow([IntPtr]$flutter.handle,0) | Out-Null
+      }
+      [NativeProbe]::RedrawWindow($edit,[IntPtr]::Zero,[IntPtr]::Zero,0x185) | Out-Null
+      Start-Sleep -Seconds 1
+      $bitmap = [Drawing.Bitmap]::new($rect.Right-$rect.Left,$rect.Bottom-$rect.Top)
+      $graphics = [Drawing.Graphics]::FromImage($bitmap)
+      $graphics.CopyFromScreen($rect.Left,$rect.Top,0,0,$bitmap.Size)
+      $bitmap.Save((Join-Path $out "$theme-$stage.png"))
+      $graphics.Dispose(); $bitmap.Dispose()
+    }
   } finally {
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 1
