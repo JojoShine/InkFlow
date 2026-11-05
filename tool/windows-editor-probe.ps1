@@ -16,6 +16,18 @@ public static class NativeProbe {
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern bool RedrawWindow(IntPtr h, IntPtr r, IntPtr region, uint flags);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int command);
+  [StructLayout(LayoutKind.Sequential)] public struct Accent { public int State, Flags, Color, Animation; }
+  [StructLayout(LayoutKind.Sequential)] public struct Composition { public int Attribute; public IntPtr Data; public int Size; }
+  [DllImport("user32.dll")] public static extern bool SetWindowCompositionAttribute(IntPtr h, ref Composition data);
+  public static void DisableAccent(IntPtr h) {
+    Accent accent = new Accent();
+    IntPtr memory = Marshal.AllocHGlobal(Marshal.SizeOf<Accent>());
+    try {
+      Marshal.StructureToPtr(accent,memory,false);
+      Composition data = new Composition {Attribute=19,Data=memory,Size=Marshal.SizeOf<Accent>()};
+      if (!SetWindowCompositionAttribute(h,ref data)) throw new Exception("Cannot disable composition accent");
+    } finally { Marshal.FreeHGlobal(memory); }
+  }
   public struct Rect { public int Left, Top, Right, Bottom; }
 }
 '@
@@ -73,7 +85,8 @@ foreach ($theme in @('paper','forest','night')) {
     $editor | ConvertTo-Json -Depth 5 | Write-Output
     if ($editor.Count -ne 1 -or $editor[0].text.Replace("`r",'') -ne $text) { throw 'Native manuscript text does not match fixture' }
     $edit = [IntPtr]$editor[0].handle
-    foreach ($stage in @('redraw','color','isolated')) {
+    foreach ($stage in @('redraw','accent-disabled','color','isolated')) {
+      if ($stage -eq 'accent-disabled') { [NativeProbe]::DisableAccent($window) }
       if ($stage -eq 'color') {
         $previous = [NativeProbe]::Message($edit,0x443,[IntPtr]::Zero,[IntPtr]0x00ff00ff)
         Write-Output "Previous background: $($previous.ToInt64().ToString('x'))"
