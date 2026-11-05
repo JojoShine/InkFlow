@@ -83,7 +83,8 @@ public static class ManuscriptProbe {
     if (!OpenClipboard(owner)) throw new Win32Exception();
     try {
       if (!EmptyClipboard()) throw new Win32Exception();
-      ClipboardFormat(13,Encoding.Unicode.GetBytes(plain+"\0"));
+      // CF_UNICODETEXT uses Windows CRLF even though work files use LF.
+      ClipboardFormat(13,Encoding.Unicode.GetBytes(plain.Replace("\r\n","\n").Replace("\n","\r\n")+"\0"));
       ClipboardFormat(RegisterClipboardFormat("Rich Text Format"),Encoding.ASCII.GetBytes("{\\rtf1\\ansi\\b RICH_TEXT_MUST_NOT_BE_PASTED}\0"));
     } finally { CloseClipboard(); }
   }
@@ -200,6 +201,10 @@ foreach ($theme in @('paper','forest','night')) {
     if ((Read-Editor $editor) -ne $beforePaste) { throw 'Undo did not restore the text before paste.' }
     [ManuscriptProbe]::Message($editor,0x454,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
     if ((Read-Editor $editor) -ne ($beforePaste+$plainPaste)) { throw 'Redo did not restore the pasted plain text.' }
+    [ManuscriptProbe]::Message($editor,0xc7,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+    [ManuscriptProbe]::ControlKey([int][char]'V')
+    Start-Sleep -Milliseconds 200
+    if ((Read-Editor $editor) -ne ($beforePaste+$plainPaste)) { throw "Ctrl+V differs: $(Read-Editor $editor | ConvertTo-Json -Compress)" }
     Assert-Paragraph $editor $process.Id
     Start-Sleep -Seconds 3
     if ([IO.File]::ReadAllText($chapter) -ne ($beforePaste+$plainPaste)) { throw 'Continued input and paste were not saved as plain text.' }

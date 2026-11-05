@@ -1,29 +1,23 @@
-name: Windows manuscript rendering regression
+name: Windows input fixture verification
 on:
   push:
     branches: [codex/windows-editor-probe]
 permissions:
   contents: read
+  actions: read
 jobs:
   render:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/download-artifact@v4
         with:
-          flutter-version: '3.41.9'
-          channel: stable
-          cache: true
-      - run: flutter pub get --enforce-lockfile
-      - run: flutter test test/editor/native_configuration_stability_test.dart
-      - run: flutter build windows --release
-      - uses: actions/upload-artifact@v4
-        with:
+          github-token: ${{ github.token }}
+          run-id: 42026196463
           name: windows-editor-probe-bundle
-          path: build/windows/x64/runner/Release/
-          retention-days: 2
-      - name: Verify native text, pixels and saved input
-        run: ./tool/windows-editor-rendering-test.ps1 -Executable build/windows/x64/runner/Release/inkflow.exe
+          path: probe-app
+      - name: Verify native paragraph settings, paste and undo
+        run: ./tool/windows-editor-rendering-test.ps1 -Executable probe-app/inkflow.exe
       - uses: actions/upload-artifact@v4
         if: always()
         with:
