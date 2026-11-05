@@ -17,6 +17,11 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - run: flutter test test/editor/native_configuration_stability_test.dart
       - run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-editor-probe-bundle
+          path: build/windows/x64/runner/Release/
+          retention-days: 2
       - name: Verify native text, pixels and saved input
         run: ./tool/windows-editor-rendering-test.ps1 -Executable build/windows/x64/runner/Release/inkflow.exe
       - uses: actions/upload-artifact@v4

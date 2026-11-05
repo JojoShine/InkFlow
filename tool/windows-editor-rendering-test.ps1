@@ -24,6 +24,15 @@ public static class ManuscriptProbe {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+  [StructLayout(LayoutKind.Sequential)] struct KeyboardInput { public ushort Key, Scan; public uint Flags, Time; public UIntPtr Extra; }
+  [StructLayout(LayoutKind.Explicit, Size=32)] struct InputData { [FieldOffset(0)] public KeyboardInput Keyboard; }
+  [StructLayout(LayoutKind.Sequential)] struct Input { public uint Type; public InputData Data; }
+  [DllImport("user32.dll", SetLastError=true)] static extern uint SendInput(uint count, Input[] inputs, int size);
+  static Input KeyInput(ushort key, uint flags) { return new Input {Type=1,Data=new InputData {Keyboard=new KeyboardInput {Key=key,Flags=flags}}}; }
+  public static void ControlKey(ushort key) {
+    Input[] inputs={KeyInput(0x11,0),KeyInput(key,0),KeyInput(key,2),KeyInput(0x11,2)};
+    if (SendInput((uint)inputs.Length,inputs,Marshal.SizeOf<Input>())!=inputs.Length) throw new Win32Exception();
+  }
   [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
   [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr VirtualAllocEx(IntPtr process, IntPtr address, UIntPtr size, uint type, uint protect);
   [DllImport("kernel32.dll")] static extern bool VirtualFreeEx(IntPtr process, IntPtr address, UIntPtr size, uint type);
@@ -53,7 +62,7 @@ public static class ManuscriptProbe {
       if (!WriteProcessMemory(process,memory,bytes,(UIntPtr)bytes.Length,out count) || count.ToUInt64()!=188) throw new Win32Exception();
       Message(editor,0x43d,IntPtr.Zero,memory);
       if (!ReadProcessMemory(process,memory,bytes,(UIntPtr)bytes.Length,out count) || count.ToUInt64()!=188) throw new Win32Exception();
-      return new int[] {bytes[170],BitConverter.ToInt32(bytes,164),BitConverter.ToInt32(bytes,160),BitConverter.ToInt32(bytes,12),BitConverter.ToInt32(bytes,20)};
+      return new int[] {bytes[170],BitConverter.ToInt32(bytes,164),BitConverter.ToInt32(bytes,160),BitConverter.ToInt32(bytes,12),BitConverter.ToInt32(bytes,20),BitConverter.ToUInt16(bytes,24)};
     } finally {
       if (memory!=IntPtr.Zero) VirtualFreeEx(process,memory,UIntPtr.Zero,0x8000);
       CloseHandle(process);
@@ -93,7 +102,7 @@ function Read-Editor($editor) {
 }
 function Assert-Paragraph($editor,$pidValue) {
   $format=[ManuscriptProbe]::Paragraph($editor,$pidValue)
-  if ($format[0] -ne 4 -or $format[1] -ne 540 -or $format[2] -ne 120 -or $format[3] -ne 600 -or $format[4] -ne -600) {
+  if ($format[0] -ne 4 -or $format[1] -ne 540 -or $format[2] -ne 120 -or $format[3] -ne 600 -or $format[4] -ne -600 -or $format[5] -ne 1) {
     throw "Manuscript paragraph formatting changed: $format"
   }
 }
@@ -167,6 +176,12 @@ foreach ($theme in @('paper','forest','night')) {
     [ManuscriptProbe]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
     [ManuscriptProbe]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
     [ManuscriptProbe]::Message($editor,0xb1,[IntPtr]0x7fffffff,[IntPtr]0x7fffffff) | Out-Null
+    foreach ($key in @('1','2','5','E','J','L','R')) {
+      [ManuscriptProbe]::ControlKey([int][char]$key)
+      Start-Sleep -Milliseconds 100
+      Assert-Paragraph $editor $process.Id
+      if ((Read-Editor $editor) -ne ($text+'X')) { throw 'Native formatting shortcuts modified the manuscript.' }
+    }
     foreach ($character in ("`r连续输入验证").ToCharArray()) {
       [ManuscriptProbe]::Message($editor,0x102,[IntPtr]([int][char]$character),[IntPtr]::Zero) | Out-Null
       Assert-Paragraph $editor $process.Id
@@ -175,10 +190,11 @@ foreach ($theme in @('paper','forest','night')) {
       Start-Sleep -Milliseconds 35
     }
     $beforePaste=$text+"X`n连续输入验证"
+    if ((Read-Editor $editor) -ne $beforePaste) { throw "Continued input differs: $(Read-Editor $editor | ConvertTo-Json -Compress)" }
     $plainPaste="`n粘贴后保留行高"
     [ManuscriptProbe]::PlainAndRichClipboard($window,$plainPaste)
     [ManuscriptProbe]::Message($editor,0x302,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
-    if ((Read-Editor $editor) -ne ($beforePaste+$plainPaste)) { throw 'Paste did not preserve plain text.' }
+    if ((Read-Editor $editor) -ne ($beforePaste+$plainPaste)) { throw "Paste differs: actual $(Read-Editor $editor | ConvertTo-Json -Compress); expected $(($beforePaste+$plainPaste) | ConvertTo-Json -Compress)" }
     Assert-Paragraph $editor $process.Id
     [ManuscriptProbe]::Message($editor,0xc7,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
     if ((Read-Editor $editor) -ne $beforePaste) { throw 'Undo did not restore the text before paste.' }

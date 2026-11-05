@@ -416,6 +416,23 @@ LRESULT CALLBACK NativeNovelEditor::EditorProc(HWND window, UINT message, WPARAM
       self->channel_->InvokeMethod("fileAction", std::make_unique<Value>(std::string(action))); return 0;
     }
   }
+  // Rich mode supplies paragraph layout, but the application's preferences
+  // remain the authority for formatting. Keep editing and IME shortcuts intact.
+  if ((message == WM_KEYDOWN || message == WM_CHAR) &&
+      (GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000)) {
+    auto key = wparam;
+    if (message == WM_CHAR && key >= 1 && key <= 26) {
+      const auto letter = static_cast<int>('A' + key - 1);
+      if (GetKeyState(letter) & 0x8000) key = static_cast<WPARAM>(letter);
+    }
+    const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    if (key == '1' || key == '2' || key == '5' || key == 'E' || key == 'J' ||
+        key == 'L' || key == 'R' || key == 'Q' || key == 'B' || key == 'U' ||
+        key == VK_OEM_PLUS || (shift &&
+        (key == 'A' || key == VK_OEM_COMMA || key == VK_OEM_PERIOD))) return 0;
+  }
+  if (message == WM_KEYDOWN && wparam == VK_OEM_PLUS &&
+      (GetKeyState(VK_MENU) & 0x8000) && !(GetKeyState(VK_CONTROL) & 0x8000)) return 0;
   if (message == WM_KEYDOWN && wparam == VK_ESCAPE && !self->composing_) {
     self->channel_->InvokeMethod("exitFocus", nullptr); return 0;
   }
