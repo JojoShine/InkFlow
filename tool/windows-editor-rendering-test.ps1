@@ -180,6 +180,7 @@ foreach ($theme in @('paper','forest','night')) {
     [ManuscriptProbe]::SetCursorPos($body.Left+130,$body.Top+14) | Out-Null
     [ManuscriptProbe]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
     [ManuscriptProbe]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 150
     [ManuscriptProbe]::Message($editor,0xb1,[IntPtr]0x7fffffff,[IntPtr]0x7fffffff) | Out-Null
     foreach ($key in @('1','2','5','E','J','L','R')) {
       [ManuscriptProbe]::ControlKey([int][char]$key)
@@ -187,6 +188,7 @@ foreach ($theme in @('paper','forest','night')) {
       Assert-Paragraph $editor $process.Id
       if ((Read-Editor $editor) -ne ($text+'X')) { throw 'Native formatting shortcuts modified the manuscript.' }
     }
+    [ManuscriptProbe]::Message($editor,0xb1,[IntPtr]0x7fffffff,[IntPtr]0x7fffffff) | Out-Null
     [ManuscriptProbe]::KeyPress(0x0d)
     Start-Sleep -Milliseconds 100
     foreach ($character in ("连续输入验证").ToCharArray()) {
