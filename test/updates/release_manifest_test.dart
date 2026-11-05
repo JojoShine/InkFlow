@@ -50,4 +50,35 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+  test('the matching architecture package is returned for direct OSS download', () {
+    final data = jsonDecode(manifest('0.2.0', 2)) as Map<String, dynamic>;
+    data['downloads'] = [
+      {
+        'platform': 'macos',
+        'arch': 'arm64',
+        'url':
+            'https://tbtparent-me.oss-cn-hangzhou.aliyuncs.com/Download/inkflow/releases/0.2.0/arm64.zip',
+      },
+      {
+        'platform': 'macos',
+        'arch': 'x64',
+        'url':
+            'https://tbtparent-me.oss-cn-hangzhou.aliyuncs.com/Download/inkflow/releases/0.2.0/x64.zip',
+      },
+    ];
+    final release = PublishedRelease.parse(
+      jsonEncode(data),
+      'macos',
+      architecture: 'x64',
+    );
+    expect(release.downloadUri.toString(), endsWith('/x64.zip'));
+    expect(
+      () => PublishedRelease.parse(
+        jsonEncode(data),
+        'macos',
+        architecture: 'unsupported',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
 }

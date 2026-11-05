@@ -179,6 +179,7 @@ void main() {
     () async {
       controller.dispose();
       var opened = 0;
+      Uri? openedUri;
       var fail = false;
       controller = UpdateController(
         enabled: false,
@@ -186,9 +187,16 @@ void main() {
         loadAppInfo: () async => const AppInfo('InkFlow', '0.1.0', '1'),
         checkPublishedRelease: () async {
           if (fail) throw const FormatException('bad manifest');
-          return const PublishedRelease('0.2.0', 2);
+          return PublishedRelease(
+            '0.2.0',
+            2,
+            downloadUri: Uri.parse(
+              'https://tbtparent-me.oss-cn-hangzhou.aliyuncs.com/Download/inkflow/releases/0.2.0/InkFlow.exe',
+            ),
+          );
         },
-        openDownloadPage: () async {
+        openDownloadPage: (uri) async {
+          openedUri = uri;
           opened++;
         },
         saveBeforeCheck: () async {
@@ -216,6 +224,7 @@ void main() {
       saveOK = true;
       await controller.downloadUpdate();
       expect(opened, 1);
+      expect(openedUri.toString(), endsWith("/0.2.0/InkFlow.exe"));
       expect(prepares, 0);
       expect(quits, 0);
       fail = true;
@@ -231,7 +240,7 @@ void main() {
       backend: backend,
       loadAppInfo: () async => const AppInfo('InkFlow', '0.1.0', '1'),
       checkPublishedRelease: () async => const PublishedRelease('0.1.1', 2),
-      openDownloadPage: () async {},
+      openDownloadPage: (_) async {},
       saveBeforeCheck: () async => true,
       prepareForInstall: () async => true,
       quitAfterPrepared: () async {},

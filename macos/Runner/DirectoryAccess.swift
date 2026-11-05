@@ -12,7 +12,21 @@ final class DirectoryAccess {
       do {
         switch call.method {
         case "openDownloadPage":
-          let url = URL(string: "https://tbtparent.me/inkflow/#download")!
+          let url: URL
+          if let requested = call.arguments as? String {
+            guard let candidate = URL(string: requested),
+              candidate.scheme == "https", candidate.host == "tbtparent-me.oss-cn-hangzhou.aliyuncs.com",
+              candidate.user == nil, candidate.password == nil, candidate.port == nil,
+              candidate.query == nil, candidate.fragment == nil,
+              candidate.path.hasPrefix("/Download/inkflow/releases/"),
+              !candidate.pathComponents.contains(".."),
+              ["zip", "dmg"].contains(candidate.pathExtension.lowercased()) else {
+              result(FlutterError(code: "invalid_download", message: "安装包地址不合法", details: nil)); return
+            }
+            url = candidate
+          } else {
+            url = URL(string: "https://tbtparent.me/inkflow/#download")!
+          }
           if NSWorkspace.shared.open(url) { result(nil) }
           else { result(FlutterError(code: "download_page", message: "无法打开官网下载页", details: nil)) }
         case "updateConfiguration":

@@ -122,6 +122,7 @@ Future<UpdateController> _createUpdates(WorkbenchController controller) async {
   var enabled = false;
   var reason = '此安装包的更新配置尚未完成，请使用正式发布版本。';
   String? feed;
+  String? architecture;
   const safety = MethodChannel('inkflow/update-safety');
   try {
     final channel = Platform.isWindows
@@ -133,6 +134,7 @@ Future<UpdateController> _createUpdates(WorkbenchController controller) async {
     enabled = configuration?['enabled'] == true;
     reason = configuration?['reason'] as String? ?? reason;
     feed = configuration?['feedURL'] as String?;
+    architecture = configuration?['architecture'] as String?;
   } on MissingPluginException {
     reason = '此安装包尚未提供安全更新支持，请使用正式发布版本。';
   } on PlatformException {
@@ -143,13 +145,15 @@ Future<UpdateController> _createUpdates(WorkbenchController controller) async {
     enabled: enabled,
     disabledReason: reason,
     feedURL: feed,
-    checkPublishedRelease: () =>
-        ReleaseManifestClient().check(Platform.isWindows ? 'windows' : 'macos'),
-    openDownloadPage: () async {
+    checkPublishedRelease: () => ReleaseManifestClient().check(
+      Platform.isWindows ? 'windows' : 'macos',
+      architecture: architecture,
+    ),
+    openDownloadPage: (uri) async {
       await (Platform.isWindows
               ? safety
               : const MethodChannel('inkflow/desktop'))
-          .invokeMethod<void>('openDownloadPage');
+          .invokeMethod<void>('openDownloadPage', uri?.toString());
     },
     saveBeforeCheck: controller.flushAll,
     prepareForInstall: controller.prepareForUpdate,

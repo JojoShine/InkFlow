@@ -89,7 +89,7 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
   final Future<bool> Function()? prepareBackend;
   final String? feedURL;
   final Future<PublishedRelease> Function()? checkPublishedRelease;
-  final Future<void> Function()? openDownloadPage;
+  final Future<void> Function(Uri? uri)? openDownloadPage;
   bool get usesDownloadUpdates =>
       checkPublishedRelease != null && openDownloadPage != null;
   final bool enabled, automaticChecks;
@@ -101,6 +101,7 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
   final TargetPlatform _platform;
   AppInfo? appInfo;
   String? availableVersion;
+  Uri? availableDownloadUri;
   UpdateStatus status = UpdateStatus.idle;
   String message = '可检查是否有新版本。';
   Future<void>? _initializing, _restoring;
@@ -193,12 +194,14 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
       if (_disposed) return;
       if (usesDownloadUpdates) {
         availableVersion = null;
+        availableDownloadUri = null;
         _set(UpdateStatus.checking, '正在检查更新…');
         final release = await checkPublishedRelease!();
         if (_disposed) return;
         if (release.isNewerThan(appInfo!.version, appInfo!.buildNumber)) {
           availableVersion = release.version;
-          _set(UpdateStatus.available, '发现新版本，可前往官网下载并安装。');
+          availableDownloadUri = release.downloadUri;
+          _set(UpdateStatus.available, '发现新版本，可以下载安装包更新。');
         } else {
           _set(UpdateStatus.upToDate, '当前已是最新版本。');
         }
@@ -232,8 +235,8 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
         return;
       }
       if (_disposed) return;
-      await openDownloadPage!();
-      if (!_disposed) _set(UpdateStatus.available, '已打开官网下载页，请下载并运行安装包完成更新。');
+      await openDownloadPage!(availableDownloadUri);
+      if (!_disposed) _set(UpdateStatus.available, '已在浏览器中打开下载，请运行安装包完成更新。');
     } catch (_) {
       if (!_disposed) {
         _set(UpdateStatus.error, '无法打开下载页，请访问 tbtparent.me/inkflow/ 下载更新。');

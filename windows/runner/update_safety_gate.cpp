@@ -44,7 +44,20 @@ UpdateSafetyGate::UpdateSafetyGate(HWND window, flutter::BinaryMessenger* messen
   channel_->SetMethodCallHandler([this](const flutter::MethodCall<Value>& call,
                                       std::unique_ptr<flutter::MethodResult<Value>> result) {
     if (call.method_name() == "openDownloadPage") {
-      const auto opened = reinterpret_cast<INT_PTR>(ShellExecuteW(state_->window, L"open", L"https://tbtparent.me/inkflow/#download", nullptr, nullptr, SW_SHOWNORMAL));
+      std::string url = "https://tbtparent.me/inkflow/#download";
+      if (call.arguments()) {
+        const auto* requested = std::get_if<std::string>(call.arguments());
+        const std::string prefix = "https://tbtparent-me.oss-cn-hangzhou.aliyuncs.com/Download/inkflow/releases/";
+        if (!requested || requested->rfind(prefix, 0) != 0 ||
+            requested->find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._%+/-", prefix.size()) != std::string::npos ||
+            requested->find("..", prefix.size()) != std::string::npos ||
+            (requested->size() < 4 || (requested->substr(requested->size() - 4) != ".exe" && requested->substr(requested->size() - 4) != ".zip"))) {
+          result->Error("invalid_download", "安装包地址不合法"); return;
+        }
+        url = *requested;
+      }
+      const std::wstring target(url.begin(), url.end());
+      const auto opened = reinterpret_cast<INT_PTR>(ShellExecuteW(state_->window, L"open", target.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
       if (opened <= 32) result->Error("download_page", "无法打开官网下载页");
       else result->Success();
       return;

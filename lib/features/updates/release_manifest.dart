@@ -3,14 +3,19 @@ import 'dart:convert';
 import 'dart:io';
 
 class PublishedRelease implements Comparable<PublishedRelease> {
-  const PublishedRelease(this.version, this.build);
+  const PublishedRelease(this.version, this.build, {this.downloadUri});
   final String version;
   final int build;
+  final Uri? downloadUri;
   static final _versionPattern = RegExp(
     r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$',
   );
 
-  static PublishedRelease parse(String text, String platform) {
+  static PublishedRelease parse(
+    String text,
+    String platform, {
+    String? architecture,
+  }) {
     final data = jsonDecode(text);
     if (data is! Map<String, dynamic> ||
         data['version'] is! String ||
@@ -23,7 +28,21 @@ class PublishedRelease implements Comparable<PublishedRelease> {
         )) {
       throw const FormatException('发布清单不完整');
     }
-    return PublishedRelease(data['version'] as String, data['build'] as int);
+    final packages = (data['downloads'] as List).where(
+      (item) => _validPackage(item, platform),
+    );
+    final matching = packages.where(
+      (item) =>
+          architecture == null ||
+          item['arch'] == architecture ||
+          item['arch'] == 'universal',
+    );
+    if (matching.isEmpty) throw const FormatException('当前架构暂无安装包');
+    return PublishedRelease(
+      data['version'] as String,
+      data['build'] as int,
+      downloadUri: Uri.parse(matching.first['url'] as String),
+    );
   }
 
   static bool _validPackage(Object? item, String platform) {
@@ -43,7 +62,6 @@ class PublishedRelease implements Comparable<PublishedRelease> {
       return false;
     }
     final bases = [
-      Uri.parse('https://tbtparent.me/inkflow/downloads/'),
       Uri.parse(
         'https://tbtparent-me.oss-cn-hangzhou.aliyuncs.com/Download/inkflow/',
       ),
@@ -87,11 +105,14 @@ class ReleaseManifestClient {
     'https://tbtparent-me.oss-cn-hangzhou.aliyuncs.com/Download/inkflow/latest.json',
   );
 
-  Future<PublishedRelease> check(String platform) async =>
-      PublishedRelease.parse(
-        await _readText(_source).timeout(const Duration(seconds: 8)),
-        platform,
-      );
+  Future<PublishedRelease> check(
+    String platform, {
+    String? architecture,
+  }) async => PublishedRelease.parse(
+    await _readText(_source).timeout(const Duration(seconds: 8)),
+    platform,
+    architecture: architecture,
+  );
 
   static Future<String> _download(Uri uri) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);

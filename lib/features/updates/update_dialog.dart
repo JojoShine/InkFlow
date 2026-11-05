@@ -44,7 +44,7 @@ class _UpdateDialog extends StatelessWidget {
               Text(
                 !controller.usesDownloadUpdates && controller.enabled
                     ? '下载和安装进度将在系统更新窗口中显示。安装前会保存稿件，完成后重新启动应用。'
-                    : '此版本通过官网安装包更新。前往下载前会保存稿件，下载后请运行安装包。',
+                    : '更新安装包由 OSS 提供。下载前会保存稿件，下载后请运行安装包。',
                 style: theme.textTheme.bodySmall,
               ),
             ],
@@ -59,7 +59,9 @@ class _UpdateDialog extends StatelessWidget {
               controller.availableVersion != null)
             OutlinedButton(
               onPressed: controller.busy ? null : controller.downloadUpdate,
-              child: const Text('前往官网下载'),
+              child: Text(
+                controller.availableDownloadUri == null ? '前往官网下载' : '下载安装包',
+              ),
             ),
           FilledButton(
             onPressed: controller.canCheck ? controller.checkForUpdates : null,

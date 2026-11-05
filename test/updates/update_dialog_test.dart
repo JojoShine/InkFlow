@@ -59,7 +59,7 @@ void main() {
         enabled: false,
         loadAppInfo: () async => const AppInfo('InkFlow', '0.1.0', '1'),
         checkPublishedRelease: () async => const PublishedRelease('0.1.1', 2),
-        openDownloadPage: () async {},
+        openDownloadPage: (_) async {},
         saveBeforeCheck: () async => true,
         prepareForInstall: () async => true,
         quitAfterPrepared: () async {},
