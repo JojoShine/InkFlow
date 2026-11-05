@@ -285,7 +285,12 @@ void NativeNovelEditor::Configure(const Map& args) {
   paragraph.dySpaceAfter = static_cast<LONG>(Number(args, "paragraphGap", 8) * 15);
   paragraph.bLineSpacingRule = 4;
   paragraph.dyLineSpacing = static_cast<LONG>(size * Number(args, "lineHeight", 1.8) * 15);
-  SendMessage(editor_, EM_SETPARAFORMAT, 0, reinterpret_cast<LPARAM>(&paragraph));
+  const auto paragraph_result = SendMessage(editor_, EM_SETPARAFORMAT, 0, reinterpret_cast<LPARAM>(&paragraph));
+  SetPropW(editor_, L"inkflow.para_result", reinterpret_cast<HANDLE>(paragraph_result));
+  PARAFORMAT2 actual = {}; actual.cbSize = sizeof(actual);
+  SendMessage(editor_, EM_GETPARAFORMAT, 0, reinterpret_cast<LPARAM>(&actual));
+  SetPropW(editor_, L"inkflow.line_spacing", reinterpret_cast<HANDLE>(static_cast<intptr_t>(actual.dyLineSpacing)));
+  SetPropW(editor_, L"inkflow.line_rule", reinterpret_cast<HANDLE>(static_cast<intptr_t>(actual.bLineSpacingRule)));
   SendMessage(editor_, EM_SETBKGNDCOLOR, 0, Color(Number(args, "backgroundColor", 0xfffffdf8)));
   SendMessage(editor_, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&selection));
   if (document) { document->Undo(tomResume, &ignored); document->Release(); }
@@ -382,6 +387,30 @@ bool NativeNovelEditor::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam
 LRESULT CALLBACK NativeNovelEditor::EditorProc(HWND window, UINT message, WPARAM wparam,
                                                LPARAM lparam, UINT_PTR, DWORD_PTR data) {
   auto* self = reinterpret_cast<NativeNovelEditor*>(data);
+  if (message == WM_APP + 12) {
+    IRichEditOle* rich = nullptr;
+    ITextDocument* document = nullptr;
+    ITextRange* range = nullptr;
+    ITextPara* para = nullptr;
+    SendMessage(window, EM_GETOLEINTERFACE, 0, reinterpret_cast<LPARAM>(&rich));
+    HRESULT status = E_FAIL;
+    if (rich) {
+      status = rich->QueryInterface(__uuidof(ITextDocument), reinterpret_cast<void**>(&document));
+      rich->Release();
+    }
+    if (document) { status = document->Range(0, 0x7fffffff, &range); document->Release(); }
+    if (range) { status = range->GetPara(&para); range->Release(); }
+    if (para) {
+      status = para->SetLineSpacing(tomLineSpaceExactly, 27.0f);
+      para->Release();
+    }
+    SetPropW(window, L"inkflow.tom_status", reinterpret_cast<HANDLE>(static_cast<intptr_t>(status)));
+    PARAFORMAT2 actual = {}; actual.cbSize = sizeof(actual);
+    SendMessage(window, EM_GETPARAFORMAT, 0, reinterpret_cast<LPARAM>(&actual));
+    SetPropW(window, L"inkflow.tom_spacing", reinterpret_cast<HANDLE>(static_cast<intptr_t>(actual.dyLineSpacing)));
+    SetPropW(window, L"inkflow.tom_rule", reinterpret_cast<HANDLE>(static_cast<intptr_t>(actual.bLineSpacingRule)));
+    return 1;
+  }
   if (message == EM_EXSETSEL) {
     const auto* range = reinterpret_cast<const CHARRANGE*>(lparam);
     if (range && range->cpMin == 0 && range->cpMax == -1) TraceCount(window, L"inkflow.select_all");

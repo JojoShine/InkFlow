@@ -72,7 +72,7 @@ function Assert-Rendering($window,$editor,$name,$expected) {
     Write-Output "$name visible: background $paper; $ink manuscript pixels."
   } finally { $graphics.Dispose(); $bitmap.Dispose() }
 }
-foreach ($theme in @('paper')) {
+foreach ($theme in @('paper','night')) {
   [IO.File]::WriteAllText($chapter,$text,[Text.UTF8Encoding]::new($false))
   @{version=1;appearance=@{presetId=$theme};layout=@{};recentWorks=@(@{path=$work;workId=$workId;title='渲染测试';chapterId=$chapterId})} | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 (Join-Path $root 'device-preferences.json')
   $expected = switch ($theme) { 'paper' { @(255,253,248) }; 'forest' { @(248,250,243) }; 'night' { @(45,41,37) } }
@@ -113,14 +113,15 @@ foreach ($theme in @('paper')) {
       if ($i -eq 30) { [ManuscriptProbe]::Message($editor,0x10d,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null }
       if ($i -gt 30 -and $i -lt 40) { [ManuscriptProbe]::Message($editor,0x102,[IntPtr]([int][char]'中'),[IntPtr]::Zero) | Out-Null }
       if ($i -eq 40) { [ManuscriptProbe]::Message($editor,0x10e,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null }
-      $row=@{frame=$i;selection=[ManuscriptProbe]::Message($editor,0xb0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()}
-      foreach ($name in @('load','changed_load','configure','select_all','selected_paint','ime_end','focus','blur')) {
+      if ($i -eq 80) { [ManuscriptProbe]::Message($editor,0x800c,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null }
+      $row=@{theme=$theme;frame=$i;selection=[ManuscriptProbe]::Message($editor,0xb0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()}
+      foreach ($name in @('load','changed_load','configure','select_all','selected_paint','ime_end','focus','blur','para_result','line_spacing','line_rule','tom_status','tom_spacing','tom_rule')) {
         $row[$name]=[ManuscriptProbe]::GetProp($editor,('inkflow.'+$name)).ToInt64()
       }
       $trace.Add($row)
       Start-Sleep -Milliseconds 40
     }
-    $trace | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $out 'input-trace.json')
+    $trace | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $out "$theme-input-trace.json")
     $trace | Where-Object { $_.frame -in @(0,19,29,39,40,60,119) } | ConvertTo-Json -Depth 5 | Write-Output
   } finally {
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
