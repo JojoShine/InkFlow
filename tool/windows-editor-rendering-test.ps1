@@ -33,6 +33,10 @@ public static class ManuscriptProbe {
     Input[] inputs={KeyInput(0x11,0),KeyInput(key,0),KeyInput(key,2),KeyInput(0x11,2)};
     if (SendInput((uint)inputs.Length,inputs,Marshal.SizeOf<Input>())!=inputs.Length) throw new Win32Exception();
   }
+  public static void KeyPress(ushort key) {
+    Input[] inputs={KeyInput(key,0),KeyInput(key,2)};
+    if (SendInput((uint)inputs.Length,inputs,Marshal.SizeOf<Input>())!=inputs.Length) throw new Win32Exception();
+  }
   [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
   [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr VirtualAllocEx(IntPtr process, IntPtr address, UIntPtr size, uint type, uint protect);
   [DllImport("kernel32.dll")] static extern bool VirtualFreeEx(IntPtr process, IntPtr address, UIntPtr size, uint type);
@@ -183,7 +187,9 @@ foreach ($theme in @('paper','forest','night')) {
       Assert-Paragraph $editor $process.Id
       if ((Read-Editor $editor) -ne ($text+'X')) { throw 'Native formatting shortcuts modified the manuscript.' }
     }
-    foreach ($character in ("`r连续输入验证").ToCharArray()) {
+    [ManuscriptProbe]::KeyPress(0x0d)
+    Start-Sleep -Milliseconds 100
+    foreach ($character in ("连续输入验证").ToCharArray()) {
       [ManuscriptProbe]::Message($editor,0x102,[IntPtr]([int][char]$character),[IntPtr]::Zero) | Out-Null
       Assert-Paragraph $editor $process.Id
       $selection=[ManuscriptProbe]::Message($editor,0xb0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
