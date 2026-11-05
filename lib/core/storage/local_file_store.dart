@@ -37,8 +37,9 @@ class LocalFileStore {
         // Never delete the original before the replacement succeeds.
         if (move(source, target, 0x1 | 0x8) != 0) return;
         final code = lastError();
-        // Scanners and sync clients can briefly hold files without delete sharing.
-        if ((code == 32 || code == 33) && attempt < 4) {
+        // MoveFileExW can report access denied as well as sharing/lock violations
+        // while scanners or sync clients briefly hold a file without delete sharing.
+        if ((code == 5 || code == 32 || code == 33) && attempt < 4) {
           await Future<void>.delayed(
             Duration(milliseconds: 50 * (attempt + 1)),
           );
