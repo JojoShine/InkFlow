@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkflow/features/appearance/theme_presets.dart';
 import 'package:inkflow/features/notes/note_models.dart';
@@ -32,18 +33,60 @@ void main() {
     },
   );
 
-  Future<void> showPanel(WidgetTester tester, NoteKind kind) async {
+  Future<void> showPanel(
+    WidgetTester tester,
+    NoteKind kind, {
+    double width = 320,
+  }) async {
     await tester.pumpWidget(
       AnimatedBuilder(
         animation: c,
         builder: (context, _) => MaterialApp(
           theme: inkTheme(c.appearance),
           home: Scaffold(
-            body: NotesPanel(controller: c, kind: kind),
+            body: NotesPanel(controller: c, kind: kind, width: width),
           ),
         ),
       ),
     );
+  }
+
+  for (final kind in NoteKind.values) {
+    testWidgets('${kind.name} list displays all edited text without clipping', (
+      tester,
+    ) async {
+      final note = await tester.runAsync(() => c.notes!.create(kind));
+      const title = '这是一个需要换行后才能完整阅读的长标题';
+      final body = List.generate(
+        20,
+        (i) => '第${i + 1}段：这部分内容应当完整展示。',
+      ).join('\n');
+      final summary = kind == NoteKind.character
+          ? List.generate(5, (i) => '角色简介第${i + 1}行。').join('\n')
+          : '';
+      c.notes!.update(
+        note!.copyWith(title: title, summary: summary, body: body),
+      );
+      expect(await tester.runAsync(c.notes!.flush), isTrue);
+      final following = await tester.runAsync(() => c.notes!.create(kind));
+      c.notes!.update(following!.copyWith(title: '下一条记录'));
+      expect(await tester.runAsync(c.notes!.flush), isTrue);
+      await showPanel(tester, kind, width: 260);
+      await tester.pump();
+      for (final content in [title, if (summary.isNotEmpty) summary, body]) {
+        final text = find.text(content);
+        expect(text, findsOneWidget);
+        final paragraph = tester.renderObject<RenderParagraph>(
+          find.descendant(of: text, matching: find.byType(RichText)),
+        );
+        expect(paragraph.didExceedMaxLines, isFalse);
+      }
+      await tester.scrollUntilVisible(find.text('下一条记录'), 200);
+      await tester.pumpAndSettle();
+      expect(find.text('下一条记录').hitTestable(), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      c.dispose();
+    });
   }
 
   testWidgets(

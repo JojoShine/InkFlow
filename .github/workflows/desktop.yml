@@ -17,9 +17,9 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - run: flutter build windows --release
       - name: Verify native text, pixels and saved input
-        run: ./tool/windows-editor-rendering-test.ps1 -Executable build/windows/x64/runner/Release/inkflow.exe
+        run: ./tool/windows-selection-trace.ps1 -Executable build/windows/x64/runner/Release/inkflow.exe
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-editor-rendering
-          path: render-probe/*.png
+          path: render-probe/*

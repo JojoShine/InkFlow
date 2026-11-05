@@ -45,6 +45,10 @@ std::string Utf8(const std::wstring& text) {
                       result.data(), length, nullptr, nullptr);
   return result;
 }
+void TraceCount(HWND window, const wchar_t* name) {
+  const auto count = reinterpret_cast<uintptr_t>(GetPropW(window, name));
+  SetPropW(window, name, reinterpret_cast<HANDLE>(count + 1));
+}
 COLORREF Color(double value) {
   auto argb = static_cast<uint32_t>(value);
   return RGB((argb >> 16) & 255, (argb >> 8) & 255, argb & 255);
@@ -218,10 +222,12 @@ std::wstring NativeNovelEditor::Text() {
 }
 
 void NativeNovelEditor::Load(const Map& args) {
+  TraceCount(editor_, L"inkflow.load");
   auto text = Wide(String(args, "text"));
   auto id = String(args, "documentId");
   document_generation_ = static_cast<int>(Number(args, "documentGeneration", 0));
   const bool changed = text != Text() || id != document_id_;
+  if (changed) TraceCount(editor_, L"inkflow.changed_load");
   loading_ = true;
   if (changed) {
     std::replace(text.begin(), text.end(), L'\n', L'\r');
@@ -242,6 +248,7 @@ void NativeNovelEditor::Load(const Map& args) {
 }
 
 void NativeNovelEditor::Configure(const Map& args) {
+  TraceCount(editor_, L"inkflow.configure");
   configuration_ = args;
   if (composing_) { configuration_pending_ = true; return; }
   configuration_pending_ = false;
@@ -375,6 +382,18 @@ bool NativeNovelEditor::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam
 LRESULT CALLBACK NativeNovelEditor::EditorProc(HWND window, UINT message, WPARAM wparam,
                                                LPARAM lparam, UINT_PTR, DWORD_PTR data) {
   auto* self = reinterpret_cast<NativeNovelEditor*>(data);
+  if (message == EM_EXSETSEL) {
+    const auto* range = reinterpret_cast<const CHARRANGE*>(lparam);
+    if (range && range->cpMin == 0 && range->cpMax == -1) TraceCount(window, L"inkflow.select_all");
+  }
+  if (message == EM_SETSEL && wparam == 0 && lparam == -1) TraceCount(window, L"inkflow.select_all");
+  if (message == WM_IME_ENDCOMPOSITION) TraceCount(window, L"inkflow.ime_end");
+  if (message == WM_SETFOCUS) TraceCount(window, L"inkflow.focus");
+  if (message == WM_KILLFOCUS) TraceCount(window, L"inkflow.blur");
+  if (message == WM_PAINT) {
+    CHARRANGE selected; SendMessage(window, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&selected));
+    if (selected.cpMin == 0 && selected.cpMax > 0) TraceCount(window, L"inkflow.selected_paint");
+  }
   if (message == WM_TIMER && wparam == 0x494e) {
     KillTimer(window, 0x494e); self->scroll_pending_ = false; self->EmitScroll(); return 0;
   }
