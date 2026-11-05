@@ -8,10 +8,12 @@ class StudySurface extends StatelessWidget {
     required this.color,
     required this.settings,
     required this.child,
+    this.texture,
   });
   final Color color;
   final AppearanceSettings settings;
   final Widget child;
+  final StudyTexture? texture;
 
   @override
   Widget build(BuildContext context) => ColoredBox(
@@ -24,7 +26,10 @@ class StudySurface extends StatelessWidget {
             child: ExcludeSemantics(
               child: RepaintBoundary(
                 child: CustomPaint(
-                  painter: _StudyGrain(settings.texture, settings.isNight),
+                  painter: _StudyGrain(
+                    texture ?? settings.texture,
+                    settings.isNight,
+                  ),
                 ),
               ),
             ),
