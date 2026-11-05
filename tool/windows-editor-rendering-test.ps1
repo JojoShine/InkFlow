@@ -22,6 +22,7 @@ public static class ManuscriptProbe {
   [DllImport("user32.dll", EntryPoint="SendMessageW")] public static extern IntPtr Message(IntPtr h, uint m, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Rect r);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
   [StructLayout(LayoutKind.Sequential)] struct KeyboardInput { public ushort Key, Scan; public uint Flags, Time; public UIntPtr Extra; }
@@ -67,6 +68,22 @@ public static class ManuscriptProbe {
       Message(editor,0x43d,IntPtr.Zero,memory);
       if (!ReadProcessMemory(process,memory,bytes,(UIntPtr)bytes.Length,out count) || count.ToUInt64()!=188) throw new Win32Exception();
       return new int[] {bytes[170],BitConverter.ToInt32(bytes,164),BitConverter.ToInt32(bytes,160),BitConverter.ToInt32(bytes,12),BitConverter.ToInt32(bytes,20),BitConverter.ToUInt16(bytes,24)};
+    } finally {
+      if (memory!=IntPtr.Zero) VirtualFreeEx(process,memory,UIntPtr.Zero,0x8000);
+      CloseHandle(process);
+    }
+  }
+  public static int LineY(IntPtr editor, int pid, int character) {
+    IntPtr process=OpenProcess(0x18,false,pid);
+    if (process==IntPtr.Zero) throw new Win32Exception();
+    IntPtr memory=IntPtr.Zero;
+    try {
+      memory=VirtualAllocEx(process,IntPtr.Zero,(UIntPtr)8,0x3000,4);
+      if (memory==IntPtr.Zero) throw new Win32Exception();
+      Message(editor,0x426,memory,(IntPtr)character);
+      byte[] point=new byte[8]; UIntPtr count;
+      if (!ReadProcessMemory(process,memory,point,(UIntPtr)8,out count) || count.ToUInt64()!=8) throw new Win32Exception();
+      return BitConverter.ToInt32(point,4);
     } finally {
       if (memory!=IntPtr.Zero) VirtualFreeEx(process,memory,UIntPtr.Zero,0x8000);
       CloseHandle(process);
@@ -191,15 +208,23 @@ foreach ($theme in @('paper','forest','night')) {
     [ManuscriptProbe]::Message($editor,0xb1,[IntPtr]0x7fffffff,[IntPtr]0x7fffffff) | Out-Null
     [ManuscriptProbe]::KeyPress(0x0d)
     Start-Sleep -Milliseconds 100
-    foreach ($character in ("连续输入验证").ToCharArray()) {
+    $continuation='连续输入验证'*10
+    foreach ($character in $continuation.ToCharArray()) {
       [ManuscriptProbe]::Message($editor,0x102,[IntPtr]([int][char]$character),[IntPtr]::Zero) | Out-Null
       Assert-Paragraph $editor $process.Id
       $selection=[ManuscriptProbe]::Message($editor,0xb0,[IntPtr]::Zero,[IntPtr]::Zero).ToInt64()
       if (($selection -band 65535) -ne (($selection -shr 16) -band 65535)) { throw 'Typing left the manuscript selected.' }
       Start-Sleep -Milliseconds 35
     }
-    $beforePaste=$text+"X`n连续输入验证"
+    $beforePaste=$text+"X`n"+$continuation
     if ((Read-Editor $editor) -ne $beforePaste) { throw "Continued input differs: $(Read-Editor $editor | ConvertTo-Json -Compress)" }
+    $start=$text.Length+2
+    $line=[ManuscriptProbe]::Message($editor,0xc9,[IntPtr]$start,[IntPtr]::Zero).ToInt32()
+    $next=[ManuscriptProbe]::Message($editor,0xbb,[IntPtr]($line+1),[IntPtr]::Zero).ToInt32()
+    if ($next -le $start -or $next -ge $beforePaste.Length) { throw 'Continuous input did not exercise automatic line wrapping.' }
+    $lineHeight=[ManuscriptProbe]::LineY($editor,$process.Id,$next)-[ManuscriptProbe]::LineY($editor,$process.Id,$start)
+    $expectedHeight=36*[ManuscriptProbe]::GetDpiForWindow($editor)/96
+    if ([Math]::Abs($lineHeight-$expectedHeight) -gt 2) { throw "Wrapped line height is $lineHeight instead of $expectedHeight pixels." }
     $plainPaste="`n粘贴后保留行高"
     [ManuscriptProbe]::PlainAndRichClipboard($window,$plainPaste)
     [ManuscriptProbe]::Message($editor,0x302,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
