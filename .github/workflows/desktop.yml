@@ -77,6 +77,15 @@ jobs:
       - name: Build Windows complete bundle
         if: matrix.platform == 'windows'
         run: flutter build windows --release
+      - name: Verify native manuscript rendering and saved input
+        if: matrix.platform == 'windows'
+        run: ./tool/windows-editor-rendering-test.ps1 -Executable build/windows/x64/runner/Release/inkflow.exe
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.platform == 'windows'
+        with:
+          name: windows-manuscript-rendering
+          path: render-probe/*.png
+          if-no-files-found: ignore
       - name: Package macOS and sign update
         if: matrix.platform == 'macos'
         env:
