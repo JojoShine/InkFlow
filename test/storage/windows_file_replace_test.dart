@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkflow/core/storage/local_file_store.dart';
+import 'package:inkflow/core/storage/record_store.dart';
 
 void main() {
   late Directory root;
@@ -89,5 +91,53 @@ void main() {
         expect(await temporary.exists(), isFalse);
       }
     },
+  );
+  test(
+    'saving a readable chapter works when its temporary path exceeds MAX_PATH',
+    () async {
+      var library = root;
+      while (library.path.length < 190) {
+        library = Directory('${library.path}/长路径创作资料');
+      }
+      await library.create(recursive: true);
+      final files = LocalFileStore(library);
+      final chapter = 'chapters/${List.filled(32, 'a').join()}.txt';
+      final original = files.file(chapter);
+      expect(original.path.length, lessThan(260));
+      expect(original.path.length + 37, greaterThan(260));
+      await original.parent.create(recursive: true);
+      await original.writeAsString('原稿', flush: true);
+      final store = RecordStore(files);
+      final before = (await store.read(chapter))!;
+      final result = await store.write(
+        chapter,
+        utf8.encode('新稿'),
+        expected: before.version,
+      );
+      expect(result.state, SaveState.saved, reason: result.message);
+      expect(await original.readAsString(), '新稿');
+      expect(
+        await original.parent
+            .list()
+            .where((file) => file.path.endsWith('.tmp'))
+            .toList(),
+        isEmpty,
+      );
+    },
+  );
+  test(
+    'Windows replacement accepts extended paths with mixed separators',
+    () async {
+      final directory = Directory('${root.path}/中文作品');
+      await directory.create();
+      final base = r'\\?\' + root.absolute.path.replaceAll('/', r'\');
+      final original = File('$base/中文作品/正文.txt');
+      final temporary = File('$base/中文作品/正文.tmp');
+      await original.writeAsString('原稿', flush: true);
+      await temporary.writeAsString('新稿', flush: true);
+      await LocalFileStore(root).replace(temporary.path, original.path);
+      expect(await original.readAsString(), '新稿');
+    },
+    skip: !Platform.isWindows,
   );
 }
