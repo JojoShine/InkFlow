@@ -42,7 +42,9 @@ class _UpdateDialog extends StatelessWidget {
               Semantics(liveRegion: true, child: Text(controller.message)),
               const SizedBox(height: 12),
               Text(
-                '下载和安装进度将在系统更新窗口中显示。安装前会保存稿件，完成后重新启动应用。',
+                !controller.usesDownloadUpdates && controller.enabled
+                    ? '下载和安装进度将在系统更新窗口中显示。安装前会保存稿件，完成后重新启动应用。'
+                    : '此版本通过官网安装包更新。前往下载前会保存稿件，下载后请运行安装包。',
                 style: theme.textTheme.bodySmall,
               ),
             ],
@@ -53,6 +55,12 @@ class _UpdateDialog extends StatelessWidget {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('关闭'),
           ),
+          if (controller.usesDownloadUpdates &&
+              controller.availableVersion != null)
+            OutlinedButton(
+              onPressed: controller.busy ? null : controller.downloadUpdate,
+              child: const Text('前往官网下载'),
+            ),
           FilledButton(
             onPressed: controller.canCheck ? controller.checkForUpdates : null,
             child: Text(

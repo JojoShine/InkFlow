@@ -14,8 +14,14 @@ const _noteLabels = {
 };
 
 class NotesPanel extends StatefulWidget {
-  const NotesPanel({super.key, required this.controller, required this.kind});
+  const NotesPanel({
+    super.key,
+    required this.controller,
+    required this.kind,
+    this.width = 320,
+  });
   final WorkbenchController controller;
+  final double width;
   final NoteKind kind;
   @override
   State<NotesPanel> createState() => _NotesPanelState();
@@ -39,7 +45,7 @@ class _NotesPanelState extends State<NotesPanel> {
     final selected = selectedId == null ? null : c.notes!.find(selectedId!);
     const labels = _noteLabels;
     return Container(
-      width: 320,
+      width: widget.width,
       decoration: BoxDecoration(
         color: colors.paper.withValues(alpha: 0.96),
         border: Border(left: BorderSide(color: colors.line)),

@@ -104,6 +104,8 @@ class DevicePreferences {
     this.layout = const EditorLayoutSettings(),
     this.recentWorks = const [],
     this.libraryView = LibraryView.list,
+    this.chapterPanelWidth = 224,
+    this.notesPanelWidth = 320,
     this.trashedWorks = const [],
     this.libraryRootPath,
     this.libraryRootBookmark = '',
@@ -113,6 +115,7 @@ class DevicePreferences {
   final EditorLayoutSettings layout;
   final List<RecentWork> recentWorks;
   final LibraryView libraryView;
+  final double chapterPanelWidth, notesPanelWidth;
   final List<RecentWork> trashedWorks;
   final String? libraryRootPath;
   final String libraryRootBookmark;
@@ -122,6 +125,8 @@ class DevicePreferences {
     EditorLayoutSettings? layout,
     List<RecentWork>? recentWorks,
     LibraryView? libraryView,
+    double? chapterPanelWidth,
+    double? notesPanelWidth,
     List<RecentWork>? trashedWorks,
     String? libraryRootPath,
     String? libraryRootBookmark,
@@ -131,6 +136,8 @@ class DevicePreferences {
     layout: layout ?? this.layout,
     recentWorks: recentWorks ?? this.recentWorks,
     libraryView: libraryView ?? this.libraryView,
+    chapterPanelWidth: chapterPanelWidth ?? this.chapterPanelWidth,
+    notesPanelWidth: notesPanelWidth ?? this.notesPanelWidth,
     trashedWorks: trashedWorks ?? this.trashedWorks,
     libraryRootPath: libraryRootPath ?? this.libraryRootPath,
     libraryRootBookmark: libraryRootBookmark ?? this.libraryRootBookmark,
@@ -139,6 +146,8 @@ class DevicePreferences {
   Map<String, Object?> toJson() => {
     'version': 1,
     'libraryView': libraryView.name,
+    'chapterPanelWidth': chapterPanelWidth,
+    'notesPanelWidth': notesPanelWidth,
     'appearance': appearance.toJson(),
     'layout': layout.toJson(),
     'recentWorks': recentWorks.map((work) => work.toJson()).toList(),
@@ -154,6 +163,8 @@ class DevicePreferences {
       libraryView: json['libraryView'] == 'cards'
           ? LibraryView.cards
           : LibraryView.list,
+      chapterPanelWidth: _panelWidth(json['chapterPanelWidth'], 224, 180, 480),
+      notesPanelWidth: _panelWidth(json['notesPanelWidth'], 320, 260, 520),
       libraryRootPath: json['libraryRootPath'] as String?,
       libraryRootBookmark: json['libraryRootBookmark'] as String? ?? '',
       typingSound: TypingSoundSettings.fromJson(
@@ -199,3 +210,8 @@ class DevicePreferences {
     );
   }
 }
+
+double _panelWidth(Object? value, double fallback, double min, double max) =>
+    value is num && value.isFinite
+    ? value.toDouble().clamp(min, max)
+    : fallback;

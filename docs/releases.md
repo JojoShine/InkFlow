@@ -125,3 +125,21 @@ python3 tool/release/release.py --tag v0.1.0 --artifacts dist --downloads-only
 默认只生成 `release-preview/` 清单，不联网、不上传。只有显式添加 `--publish` 才写 OSS，且仍执行所有验证。不在本地随意运行 `configure_keys.py`：它会修改原生公共密钥配置，设计用于一次性的 Actions checkout。
 
 参考：[GitHub runner 类型](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job)、[auto_updater 快速开始](https://leanflutter.dev/documentation/auto_updater/quick-start)、[Sparkle 签名与分发](https://sparkle-project.org/documentation/)、[OSS Python SDK 上传](https://www.alibabacloud.com/help/en/oss/developer-reference/simple-upload-1)、[OSS 禁止覆盖](https://github.com/aliyun/aliyun-oss-python-sdk/blob/master/examples/object_forbid_overwrite.py)。
+
+
+## 0.1.1 更新交互与构建约束
+
+所有安装包继续由现有 GitHub Actions 构建、打包和发布，不使用本地包替代。下一版源码为 `0.1.1+2`；正式发布 tag 必须为 `v0.1.1`。仅提交分支会生成 Actions 工件，仍需按原流程推送版本 tag 才发布 OSS。
+
+默认 `--downloads-only` 的预览包不启用原生自动安装，但“关于与更新”现在可以检查官网和 OSS 的 `latest.json`，比较版本号及 build，发现更新后保存稿件并打开固定官网下载页，由用户运行安装包。会比较两个来源，避免同源旧清单挡住新 OSS 版本。网络或清单错误显示可重试状态。
+
+启用 `INKFLOW_SIGNED_UPDATES=true` 后沿用现有公钥注入、安装包签名、签名验证和安全安装链；签名 tag 构建若缺少更新公钥会在编译前明确失败，不会生成一个自动更新悄悄禁用的“签名发布包”。此改动不生成、轮换或提交任何私钥，不代替原签名与公证配置。
+
+已安装的旧 `0.1.0+1` 预览包没有本次检查逻辑，首次升级仍须从官网下载新版。源码变更不会使旧包的禁用按钮自行启用。
+
+
+## OSS 为统一版本源
+
+桌面端版本检查统一读取 OSS 的 `latest.json`，不依赖安装包是否含签名配置，也不采信官网服务器上的独立预览清单来覆盖 OSS 版本。检查失败显示可重试错误。网站优先 OSS 的 latest，既有同源清单仅用于 OSS 暂不可用时的网页下载回退。
+
+版本号、build、安装包 URL、SHA256、历史版本清单继续由 GitHub Actions 的发布脚本生成并写入 OSS。默认下载发布不要求更新签名。下载安装包由用户确认；保留已有签名验证和安装保存保护，不启用未校验安装包的静默执行。

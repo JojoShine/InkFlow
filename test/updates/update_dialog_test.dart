@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkflow/features/updates/update_controller.dart';
+import 'package:inkflow/features/updates/release_manifest.dart';
 import 'package:inkflow/features/updates/update_dialog.dart';
 import 'update_controller_test.dart' show FakeUpdater;
 
@@ -51,4 +52,47 @@ void main() {
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
   });
+  testWidgets(
+    'download-only dialog offers an actionable check and the correct installation guidance',
+    (tester) async {
+      final controller = UpdateController(
+        enabled: false,
+        loadAppInfo: () async => const AppInfo('InkFlow', '0.1.0', '1'),
+        checkPublishedRelease: () async => const PublishedRelease('0.1.1', 2),
+        openDownloadPage: () async {},
+        saveBeforeCheck: () async => true,
+        prepareForInstall: () async => true,
+        quitAfterPrepared: () async {},
+        resumeEditing: () async {},
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => showAppUpdates(context, controller),
+                child: const Text('打开'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('打开'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, '检查更新'))
+            .onPressed,
+        isNotNull,
+      );
+      expect(find.textContaining('系统更新窗口'), findsNothing);
+      await tester.tap(find.text('检查更新'));
+      await tester.pumpAndSettle();
+      expect(find.text('新版本 0.1.1'), findsOneWidget);
+      expect(find.text('前往官网下载'), findsOneWidget);
+      await tester.tap(find.text('关闭'));
+      await tester.pumpAndSettle();
+    },
+  );
 }

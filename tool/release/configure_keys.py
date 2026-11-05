@@ -9,8 +9,11 @@ import tempfile
 parser = argparse.ArgumentParser()
 parser.add_argument('platform', choices=['macos', 'windows'])
 args = parser.parse_args()
+required = os.environ.get('REQUIRE_UPDATE_KEYS') == 'true'
 if args.platform == 'macos':
     public = os.environ.get('MACOS_ED25519_PUBLIC_KEY', '').strip()
+    if required and not public:
+        raise RuntimeError('Missing update public key for signed macOS release')
     path = Path('macos/Runner/Info.plist')
     with path.open('rb') as stream:
         plist = plistlib.load(stream)
@@ -27,6 +30,8 @@ else:
             key.write_text(private)
             key.chmod(0o600)
             public = subprocess.check_output(['openssl', 'pkey', '-in', str(key), '-pubout'], text=True)
+    if required and not public:
+        raise RuntimeError('Missing update public key for signed Windows release')
     if public:
         public_file = Path(os.environ['RUNNER_TEMP']) / 'inkflow-dsa-public.pem'
         public_file.write_text(public)

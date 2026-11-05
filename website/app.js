@@ -45,25 +45,36 @@
     } catch { return false; }
   }
   function normalizeRelease(data) {
-    if (!data || typeof data.version !== 'string' || !data.version.trim() || !Array.isArray(data.downloads)
+    if (!data || typeof data.version !== 'string' || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(data.version) || !Array.isArray(data.downloads)
       || !Array.isArray(data.notes) || !data.notes.every(note => typeof note === 'string')
-      || !['string', 'number'].includes(typeof data.build) || typeof data.publishedAt !== 'string'
+      || !Number.isSafeInteger(Number(data.build)) || Number(data.build) <= 0 || typeof data.publishedAt !== 'string'
       || !Number.isFinite(Date.parse(data.publishedAt))) return null;
     return { ...data, downloads: data.downloads.filter(safeDownload) };
   }
+  function compareReleases(a, b) {
+    const av = a.version.split('.').map(Number), bv = b.version.split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+      if (av[i] !== bv[i]) return av[i] - bv[i];
+    }
+    return Number(a.build) - Number(b.build);
+  }
   async function fetchManifest(file, normalize) {
-    for (const source of [`./${file}`, `${RELEASE_BASE}${file}`]) {
+    const results = await Promise.all([`./${file}`, `${RELEASE_BASE}${file}`].map(async source => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 6500);
       try {
         const response = await fetch(source, { signal: controller.signal, cache: 'no-cache', credentials: 'omit' });
-        if (!response.ok) continue;
-        const value = normalize(await response.json());
-        if (value) return value;
-      } catch { /* Try the release bucket if the same-origin manifest is unavailable. */ }
+        return response.ok ? normalize(await response.json()) : null;
+      } catch { return null; }
       finally { clearTimeout(timeout); }
-    }
-    return null;
+    }));
+    const valid = results.filter(value => value !== null);
+    if (!valid.length) return null;
+    // OSS is the version registry; same-origin JSON is a legacy fallback.
+    if (file === 'latest.json') return results[1] || results[0];
+    const releases = new Map();
+    valid.flat().forEach(release => releases.set(`${release.version}+${release.build}`, release));
+    return [...releases.values()].sort((a, b) => compareReleases(b, a));
   }
   function readableSize(value) {
     if (typeof value === 'number' && Number.isFinite(value) && value > 0) return `${(value / 1048576).toFixed(1)} MB`;

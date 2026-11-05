@@ -9,6 +9,7 @@ import 'package:screen_retriever/screen_retriever.dart';
 import 'app/inkflow_app.dart';
 import 'features/workbench/workbench_controller.dart';
 import 'features/updates/update_controller.dart';
+import 'features/updates/release_manifest.dart';
 import 'features/migration/initial_migration_dialog.dart';
 import 'core/platform/instance_coordinator.dart';
 import 'app/desktop_actions.dart';
@@ -142,6 +143,14 @@ Future<UpdateController> _createUpdates(WorkbenchController controller) async {
     enabled: enabled,
     disabledReason: reason,
     feedURL: feed,
+    checkPublishedRelease: () =>
+        ReleaseManifestClient().check(Platform.isWindows ? 'windows' : 'macos'),
+    openDownloadPage: () async {
+      await (Platform.isWindows
+              ? safety
+              : const MethodChannel('inkflow/desktop'))
+          .invokeMethod<void>('openDownloadPage');
+    },
     saveBeforeCheck: controller.flushAll,
     prepareForInstall: controller.prepareForUpdate,
     resumeEditing: controller.resumeAfterUpdate,

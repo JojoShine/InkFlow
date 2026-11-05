@@ -13,8 +13,9 @@ typedef _DirectoryEntry = ({
 });
 
 class ChapterSidebar extends StatefulWidget {
-  const ChapterSidebar({super.key, required this.controller});
+  const ChapterSidebar({super.key, required this.controller, this.width = 224});
   final WorkbenchController controller;
+  final double width;
   @override
   State<ChapterSidebar> createState() => _ChapterSidebarState();
 }
@@ -177,7 +178,7 @@ class _ChapterSidebarState extends State<ChapterSidebar> {
       }
     }
     return Container(
-      width: 224,
+      width: widget.width,
       decoration: BoxDecoration(
         color: colors.background.withValues(alpha: .92),
         border: Border(right: BorderSide(color: colors.line)),
@@ -397,11 +398,14 @@ class _ChapterSidebarState extends State<ChapterSidebar> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    chapter.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 14),
+                  child: Tooltip(
+                    message: chapter.title,
+                    child: Text(
+                      chapter.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14),
+                    ),
                   ),
                 ),
                 PopupMenuButton<String>(

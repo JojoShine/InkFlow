@@ -26,6 +26,7 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - run: flutter analyze
       - run: node --check website/app.js
+      - run: node --test tool/website_release_test.cjs
       - run: flutter test
       - run: python3 -m unittest discover -s tool/release -v
       - name: Validate release tag
@@ -60,8 +61,12 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - name: Test platform text decoding
         run: flutter test test/transfer/text_transfer_test.dart
+      - name: Test Windows file replacement and sharing locks
+        if: matrix.platform == 'windows'
+        run: flutter test test/storage/windows_file_replace_test.dart test/storage/record_store_test.dart
       - name: Configure public update keys
         env:
+          REQUIRE_UPDATE_KEYS: ${{ startsWith(github.ref, 'refs/tags/') && vars.INKFLOW_SIGNED_UPDATES == 'true' && 'true' || 'false' }}
           MACOS_ED25519_PUBLIC_KEY: ${{ vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.MACOS_ED25519_PUBLIC_KEY || '' }}
           WINDOWS_DSA_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/') && vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.WINDOWS_DSA_PRIVATE_KEY || '' }}
           WINDOWS_DSA_PUBLIC_KEY: ${{ vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.WINDOWS_DSA_PUBLIC_KEY || '' }}

@@ -85,7 +85,12 @@ NativeNovelEditor::NativeNovelEditor(HWND parent, flutter::BinaryMessenger* mess
       ApplyTextInsets(); ScheduleScroll();
     } else if (method == "visible") {
       auto visible = call.arguments() ? std::get_if<bool>(call.arguments()) : nullptr;
+      if (!visible || !*visible) restore_focus_ = GetFocus() == editor_;
       ShowWindow(editor_, visible && *visible ? SW_SHOWNA : SW_HIDE);
+      if (visible && *visible && restore_focus_) {
+        SetFocus(editor_);
+        restore_focus_ = false;
+      }
     } else if (method == "focus") {
       SetFocus(editor_);
     } else if (method == "scrollTo") {
@@ -174,7 +179,7 @@ void NativeNovelEditor::Create() {
   if (editor_) return;
   if (!module_) module_ = LoadLibraryW(L"Msftedit.dll");
   if (!module_) return;
-  editor_ = CreateWindowExW(0, MSFTEDIT_CLASS, L"", WS_CHILD |
+  editor_ = CreateWindowExW(0, MSFTEDIT_CLASS, L"", WS_CHILD | WS_CLIPSIBLINGS |
     ES_MULTILINE | ES_WANTRETURN | ES_AUTOVSCROLL | ES_NOHIDESEL | WS_VSCROLL,
     0, 0, 1, 1, parent_, nullptr, GetModuleHandle(nullptr), nullptr);
   if (!editor_) return;
@@ -196,6 +201,7 @@ void NativeNovelEditor::Destroy() {
   }
   editor_ = nullptr; document_id_.clear(); composing_ = false; loading_ = false; scroll_pending_ = false;
   update_locked_ = false;
+  configuration_pending_ = false; restore_focus_ = false;
 }
 
 std::wstring NativeNovelEditor::Text() {
@@ -237,7 +243,8 @@ void NativeNovelEditor::Load(const Map& args) {
 
 void NativeNovelEditor::Configure(const Map& args) {
   configuration_ = args;
-  if (composing_) return;
+  if (composing_) { configuration_pending_ = true; return; }
+  configuration_pending_ = false;
   loading_ = true;
   CHARRANGE selection;
   SendMessage(editor_, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&selection));
@@ -419,7 +426,10 @@ LRESULT CALLBACK NativeNovelEditor::EditorProc(HWND window, UINT message, WPARAM
   if (message == WM_IME_ENDCOMPOSITION) {
     self->composing_ = false; self->composing_length_ = 0;
     self->channel_->InvokeMethod("composition", std::make_unique<Value>(false));
-    self->Configure(self->configuration_); self->Emit();
+    // RichEdit inherits the existing format during typing. Reformatting the
+    // entire document after each IME commit repaints it and disturbs the caret.
+    if (self->configuration_pending_) self->Configure(self->configuration_);
+    self->Emit();
   }
   return result;
 }

@@ -11,6 +11,10 @@ final class DirectoryAccess {
       guard let self = self else { result(nil); return }
       do {
         switch call.method {
+        case "openDownloadPage":
+          let url = URL(string: "https://tbtparent.me/inkflow/#download")!
+          if NSWorkspace.shared.open(url) { result(nil) }
+          else { result(FlutterError(code: "download_page", message: "无法打开官网下载页", details: nil)) }
         case "updateConfiguration":
           #if arch(arm64)
           let architecture = "arm64"

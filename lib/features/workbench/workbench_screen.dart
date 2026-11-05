@@ -131,12 +131,19 @@ class WorkbenchScreen extends StatelessWidget {
                       ? LibraryScreen(controller: c)
                       : LayoutBuilder(
                           builder: (context, size) {
-                            final showRight =
-                                c.panel != null &&
+                            final leftWidth = c.preferences.chapterPanelWidth
+                                .clamp(
+                                  180.0,
+                                  (size.maxWidth - 546).clamp(180.0, 480.0),
+                                );
+                            final rightSpace =
                                 size.maxWidth -
-                                        (c.leftVisible ? 224 : 0) -
-                                        320 >=
-                                    540;
+                                (c.leftVisible ? leftWidth + 6 : 0) -
+                                546;
+                            final showRight =
+                                c.panel != null && rightSpace >= 260;
+                            final rightWidth = c.preferences.notesPanelWidth
+                                .clamp(260.0, rightSpace.clamp(260.0, 520.0));
                             return Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -146,6 +153,17 @@ class WorkbenchScreen extends StatelessWidget {
                                       'directory-${c.work!.manifest.workId}',
                                     ),
                                     controller: c,
+                                    width: leftWidth,
+                                  ),
+                                if (c.leftVisible)
+                                  _PanelResizeHandle(
+                                    key: const ValueKey('resize-chapters'),
+                                    label: '调整章节栏宽度',
+                                    onResize: (delta) => c.updatePanelWidths(
+                                      chapters: leftWidth + delta,
+                                    ),
+                                    onReset: () =>
+                                        c.updatePanelWidths(chapters: 224),
                                   ),
                                 Expanded(
                                   key: const ValueKey('editor-pane'),
@@ -231,12 +249,23 @@ class WorkbenchScreen extends StatelessWidget {
                                   ),
                                 ),
                                 if (showRight)
+                                  _PanelResizeHandle(
+                                    key: const ValueKey('resize-notes'),
+                                    label: '调整资料栏宽度',
+                                    onResize: (delta) => c.updatePanelWidths(
+                                      notes: rightWidth - delta,
+                                    ),
+                                    onReset: () =>
+                                        c.updatePanelWidths(notes: 320),
+                                  ),
+                                if (showRight)
                                   NotesPanel(
                                     key: ValueKey(
                                       '${c.work!.manifest.workId}-${c.panel}',
                                     ),
                                     controller: c,
                                     kind: c.panel!,
+                                    width: rightWidth,
                                   ),
                               ],
                             );
@@ -356,12 +385,12 @@ class _Toolbar extends StatelessWidget {
           if (c.libraryVisible) LibraryActionsMenu(controller: c),
           const SizedBox(width: 12),
           if (Platform.isWindows) ...[
-            IconButton(
+            _WindowButton(
               tooltip: '最小化',
               onPressed: windowManager.minimize,
-              icon: const Icon(InkIcons.minus, size: 18),
+              icon: InkIcons.minus,
             ),
-            IconButton(
+            _WindowButton(
               tooltip: '最大化或还原',
               onPressed: () async {
                 if (await windowManager.isMaximized()) {
@@ -370,12 +399,12 @@ class _Toolbar extends StatelessWidget {
                   await windowManager.maximize();
                 }
               },
-              icon: const Icon(InkIcons.window, size: 16),
+              icon: InkIcons.window,
             ),
-            IconButton(
+            _WindowButton(
               tooltip: '关闭',
               onPressed: windowManager.close,
-              icon: const Icon(InkIcons.close, size: 18),
+              icon: InkIcons.close,
             ),
           ],
         ],
@@ -504,6 +533,65 @@ class _EmptyChapter extends StatelessWidget {
           label: const Text('新建章节'),
         ),
       ],
+    ),
+  );
+}
+
+class _WindowButton extends StatelessWidget {
+  const _WindowButton({
+    required this.tooltip,
+    required this.onPressed,
+    required this.icon,
+  });
+  final String tooltip;
+  final VoidCallback onPressed;
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 2),
+    child: IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon, size: 14),
+      style: IconButton.styleFrom(
+        fixedSize: const Size(32, 28),
+        minimumSize: const Size(32, 28),
+        padding: EdgeInsets.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+      ),
+    ),
+  );
+}
+
+class _PanelResizeHandle extends StatelessWidget {
+  const _PanelResizeHandle({
+    super.key,
+    required this.label,
+    required this.onResize,
+    required this.onReset,
+  });
+  final String label;
+  final ValueChanged<double> onResize;
+  final VoidCallback onReset;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    onIncrease: () => onResize(16),
+    onDecrease: () => onResize(-16),
+    child: MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragUpdate: (details) => onResize(details.delta.dx),
+        onDoubleTap: onReset,
+        child: SizedBox(
+          width: 6,
+          child: Center(
+            child: Container(width: 1, color: InkPalette.of(context).line),
+          ),
+        ),
+      ),
     ),
   );
 }

@@ -21,45 +21,31 @@ class LocalFileStore {
       return;
     }
     final library = DynamicLibrary.open('kernel32.dll');
+    final move = library
+        .lookupFunction<
+          Int32 Function(Pointer<Utf16>, Pointer<Utf16>, Uint32),
+          int Function(Pointer<Utf16>, Pointer<Utf16>, int)
+        >('MoveFileExW');
+    final lastError = library.lookupFunction<Uint32 Function(), int Function()>(
+      'GetLastError',
+    );
     final source = temporary.toNativeUtf16();
     final target = destination.toNativeUtf16();
     try {
-      final int success;
-      if (await File(destination).exists()) {
-        final replace = library
-            .lookupFunction<
-              Int32 Function(
-                Pointer<Utf16>,
-                Pointer<Utf16>,
-                Pointer<Utf16>,
-                Uint32,
-                Pointer<Void>,
-                Pointer<Void>,
-              ),
-              int Function(
-                Pointer<Utf16>,
-                Pointer<Utf16>,
-                Pointer<Utf16>,
-                int,
-                Pointer<Void>,
-                Pointer<Void>,
-              )
-            >('ReplaceFileW');
-        success = replace(target, source, nullptr, 0, nullptr, nullptr);
-      } else {
-        final move = library
-            .lookupFunction<
-              Int32 Function(Pointer<Utf16>, Pointer<Utf16>, Uint32),
-              int Function(Pointer<Utf16>, Pointer<Utf16>, int)
-            >('MoveFileExW');
-        success = move(source, target, 8);
-      }
-      if (success == 0) {
-        final code = library.lookupFunction<Uint32 Function(), int Function()>(
-          'GetLastError',
-        )();
+      for (var attempt = 0; ; attempt++) {
+        // Same-directory rename avoids ReplaceFileW's metadata-merge requirements.
+        // Never delete the original before the replacement succeeds.
+        if (move(source, target, 0x1 | 0x8) != 0) return;
+        final code = lastError();
+        // Scanners and sync clients can briefly hold files without delete sharing.
+        if ((code == 32 || code == 33) && attempt < 4) {
+          await Future<void>.delayed(
+            Duration(milliseconds: 50 * (attempt + 1)),
+          );
+          continue;
+        }
         throw FileSystemException(
-          '无法安全替换作品文件',
+          '无法安全替换作品文件（Windows 错误 $code）',
           destination,
           OSError('Windows file replacement failed', code),
         );

@@ -597,6 +597,19 @@ class WorkbenchController extends ChangeNotifier {
     return directory;
   }
 
+  void updatePanelWidths({double? chapters, double? notes}) {
+    if ((chapters != null && !chapters.isFinite) ||
+        (notes != null && !notes.isFinite)) {
+      return;
+    }
+    preferences = preferences.copyWith(
+      chapterPanelWidth: chapters?.clamp(180, 480),
+      notesPanelWidth: notes?.clamp(260, 520),
+    );
+    _schedulePreferences();
+    notifyListeners();
+  }
+
   void updateAppearance(AppearanceSettings appearance) {
     preferences = preferences.copyWith(appearance: appearance);
     _schedulePreferences();

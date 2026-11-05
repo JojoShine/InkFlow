@@ -38,6 +38,8 @@ class NativeNovelEditor {
   HMODULE module_ = nullptr;
   bool loading_ = false;
   bool composing_ = false;
+  bool configuration_pending_ = false;
+  bool restore_focus_ = false;
   bool update_locked_ = false;
   LONG composing_start_ = 0;
   LONG composing_length_ = 0;

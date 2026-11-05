@@ -3,6 +3,7 @@ import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkflow/features/updates/update_controller.dart';
+import 'package:inkflow/features/updates/release_manifest.dart';
 
 class FakeUpdater implements UpdaterBackend {
   UpdaterListener? listener;
@@ -172,6 +173,75 @@ void main() {
     expect(backend.listener, isNull);
     expect(controller.status, UpdateStatus.disabled);
     expect(controller.message, '此安装包暂不支持自动更新');
+  });
+  test(
+    'Actions download-only packages can check releases without initializing native installation',
+    () async {
+      controller.dispose();
+      var opened = 0;
+      var fail = false;
+      controller = UpdateController(
+        enabled: false,
+        backend: backend,
+        loadAppInfo: () async => const AppInfo('InkFlow', '0.1.0', '1'),
+        checkPublishedRelease: () async {
+          if (fail) throw const FormatException('bad manifest');
+          return const PublishedRelease('0.2.0', 2);
+        },
+        openDownloadPage: () async {
+          opened++;
+        },
+        saveBeforeCheck: () async {
+          saves++;
+          return saveOK;
+        },
+        prepareForInstall: () async {
+          prepares++;
+          return true;
+        },
+        quitAfterPrepared: () async {
+          quits++;
+        },
+        resumeEditing: () async {},
+      );
+      await controller.initialize();
+      expect(controller.canCheck, isTrue);
+      await controller.checkForUpdates();
+      expect(controller.status, UpdateStatus.available);
+      expect(controller.availableVersion, '0.2.0');
+      expect(backend.feed, isNull);
+      saveOK = false;
+      await controller.downloadUpdate();
+      expect(opened, 0);
+      saveOK = true;
+      await controller.downloadUpdate();
+      expect(opened, 1);
+      expect(prepares, 0);
+      expect(quits, 0);
+      fail = true;
+      await controller.checkForUpdates();
+      expect(controller.status, UpdateStatus.error);
+      expect(controller.canCheck, isTrue);
+    },
+  );
+  test('OSS version checks are independent of signing configuration', () async {
+    controller.dispose();
+    controller = UpdateController(
+      enabled: true,
+      backend: backend,
+      loadAppInfo: () async => const AppInfo('InkFlow', '0.1.0', '1'),
+      checkPublishedRelease: () async => const PublishedRelease('0.1.1', 2),
+      openDownloadPage: () async {},
+      saveBeforeCheck: () async => true,
+      prepareForInstall: () async => true,
+      quitAfterPrepared: () async {},
+      resumeEditing: () async {},
+    );
+    await controller.checkForUpdates();
+    expect(controller.status, UpdateStatus.available);
+    expect(controller.availableVersion, '0.1.1');
+    expect(backend.feed, isNull);
+    expect(backend.checks, 0);
   });
   test('backend safety must succeed before feed initialization', () async {
     controller.dispose();

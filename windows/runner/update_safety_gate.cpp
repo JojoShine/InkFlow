@@ -1,4 +1,5 @@
 #include "update_safety_gate.h"
+#include <shellapi.h>
 
 #include <flutter/method_result_functions.h>
 #include <flutter/standard_method_codec.h>
@@ -42,6 +43,12 @@ UpdateSafetyGate::UpdateSafetyGate(HWND window, flutter::BinaryMessenger* messen
       messenger, "inkflow/update-safety", &flutter::StandardMethodCodec::GetInstance());
   channel_->SetMethodCallHandler([this](const flutter::MethodCall<Value>& call,
                                       std::unique_ptr<flutter::MethodResult<Value>> result) {
+    if (call.method_name() == "openDownloadPage") {
+      const auto opened = reinterpret_cast<INT_PTR>(ShellExecuteW(state_->window, L"open", L"https://tbtparent.me/inkflow/#download", nullptr, nullptr, SW_SHOWNORMAL));
+      if (opened <= 32) result->Error("download_page", "无法打开官网下载页");
+      else result->Success();
+      return;
+    }
     if (call.method_name() == "configuration") {
       const auto resource = FindResourceW(nullptr, L"DSAPub", L"DSAPEM");
       const auto data = resource ? LoadResource(nullptr, resource) : nullptr;
