@@ -1,4 +1,4 @@
-name: Windows manuscript rendering probe
+name: Windows manuscript rendering regression
 on:
   push:
     branches: [codex/windows-editor-probe]
@@ -9,12 +9,17 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect released native editor
-        run: ./tool/windows-editor-probe.ps1
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter build windows --release
+      - name: Verify native text, pixels and saved input
+        run: ./tool/windows-editor-rendering-test.ps1 -Executable build/windows/x64/runner/Release/inkflow.exe
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-editor-rendering
-          path: |
-            render-probe/*.png
-            render-probe/*-windows.json
+          path: render-probe/*.png

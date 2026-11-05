@@ -98,7 +98,8 @@ Future<void> main(List<String> arguments) async {
       title: 'InkFlow',
       titleBarStyle: TitleBarStyle.hidden,
       windowButtonVisibility: true,
-      backgroundColor: Color(0xfff3efe7),
+      // Windows accent composition washes out the native GDI manuscript.
+      backgroundColor: Platform.isWindows ? null : const Color(0xfff3efe7),
     ),
     () async {
       await windowManager.show();
