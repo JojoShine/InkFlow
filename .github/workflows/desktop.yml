@@ -1,148 +1,20 @@
-name: Desktop CI and OSS release
+name: Windows manuscript rendering probe
 on:
   push:
-    branches: ['**']
-    tags: ['v*']
-    paths-ignore: ['website/**', 'index.html', '**/*.md']
-  pull_request:
-  workflow_dispatch:
+    branches: [codex/windows-editor-probe]
 permissions:
   contents: read
-concurrency:
-  group: desktop-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
-env:
-  FLUTTER_VERSION: '3.41.9'
 jobs:
-  checks:
-    runs-on: ubuntu-24.04
+  render:
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-      - run: flutter pub get --enforce-lockfile
-      - run: flutter analyze
-      - run: node --check website/app.js
-      - run: node --test tool/website_release_test.cjs
-      - run: flutter test
-      - run: python3 -m unittest discover -s tool/release -v
-      - name: Validate release tag
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: python3 -c 'import os,sys; sys.path.insert(0,"tool/release"); from release import read_version; read_version("pubspec.yaml",os.environ["RELEASE_TAG"])'
-  build:
-    needs: checks
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-26-intel
-            platform: macos
-            arch: universal
-          - runner: windows-2022
-            platform: windows
-            arch: x64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: python -m pip install -r tool/release/requirements.txt
-      - run: flutter pub get --enforce-lockfile
-      - name: Test platform text decoding
-        run: flutter test test/transfer/text_transfer_test.dart
-      - name: Test Windows file replacement and sharing locks
-        if: matrix.platform == 'windows'
-        run: flutter test test/storage/windows_file_replace_test.dart test/storage/record_store_test.dart
-      - name: Configure public update keys
-        env:
-          REQUIRE_UPDATE_KEYS: ${{ startsWith(github.ref, 'refs/tags/') && vars.INKFLOW_SIGNED_UPDATES == 'true' && 'true' || 'false' }}
-          MACOS_ED25519_PUBLIC_KEY: ${{ vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.MACOS_ED25519_PUBLIC_KEY || '' }}
-          WINDOWS_DSA_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/') && vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.WINDOWS_DSA_PRIVATE_KEY || '' }}
-          WINDOWS_DSA_PUBLIC_KEY: ${{ vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.WINDOWS_DSA_PUBLIC_KEY || '' }}
-        run: python tool/release/configure_keys.py ${{ matrix.platform }}
-      - name: Build macOS app bundle
-        if: matrix.platform == 'macos'
-        run: flutter build macos --release
-      - name: Build Windows complete bundle
-        if: matrix.platform == 'windows'
-        run: flutter build windows --release
-      - name: Package macOS and sign update
-        if: matrix.platform == 'macos'
-        env:
-          MACOS_ED25519_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/') && vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.MACOS_ED25519_PRIVATE_KEY || '' }}
-          MACOS_CERTIFICATE_P12: ${{ startsWith(github.ref, 'refs/tags/') && secrets.MACOS_CERTIFICATE_P12 || '' }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash tool/release/package_macos.sh universal
-      - name: Package Windows installer and sign update
-        if: matrix.platform == 'windows'
-        env:
-          WINDOWS_DSA_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/') && vars.INKFLOW_SIGNED_UPDATES == 'true' && secrets.WINDOWS_DSA_PRIVATE_KEY || '' }}
-          WINDOWS_CERTIFICATE_PFX: ${{ startsWith(github.ref, 'refs/tags/') && secrets.WINDOWS_CERTIFICATE_PFX || '' }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: ./tool/release/package_windows.ps1
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
-          path: |
-            dist/*.zip
-            dist/*.exe
-            dist/*.json
-          if-no-files-found: error
-          retention-days: 14
-  publish:
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: build
-    runs-on: ubuntu-24.04
-    concurrency:
-      group: oss-production-release
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: desktop-*
-          path: dist
-          merge-multiple: true
-      - run: python -m pip install -r tool/release/requirements.txt
-      - name: Require release credentials
-        env:
-          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
-          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
-        run: python -c 'import os; assert all(os.environ.get(k) for k in ("OSS_ACCESS_KEY_ID","OSS_ACCESS_KEY_SECRET")), "Missing OSS release credentials"'
-      - name: Validate packages and publish OSS
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-          SIGNED_UPDATES: ${{ vars.INKFLOW_SIGNED_UPDATES || 'false' }}
-          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
-          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
-          OSS_SECURITY_TOKEN: ${{ secrets.OSS_SECURITY_TOKEN }}
-        run: |
-          options=()
-          if [ "$SIGNED_UPDATES" != "true" ]; then
-            options+=(--downloads-only)
-          fi
-          python tool/release/release.py --tag "$RELEASE_TAG" --publish "${options[@]}"
+      - name: Inspect released native editor
+        run: ./tool/windows-editor-probe.ps1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: release-manifest-preview
-          path: release-preview/
-          if-no-files-found: ignore
+          name: windows-editor-rendering
+          path: |
+            render-probe/*.png
+            render-probe/*-windows.json
