@@ -4,6 +4,7 @@ import 'package:window_manager/window_manager.dart';
 import '../../app/ui_actions.dart';
 import '../../app/desktop_actions.dart';
 import '../appearance/appearance_panel.dart';
+import '../appearance/appearance_settings.dart';
 import '../appearance/theme_presets.dart';
 import '../appearance/wallpaper_layer.dart';
 import '../appearance/study_surface.dart';
@@ -170,8 +171,15 @@ class WorkbenchScreen extends StatelessWidget {
                                   child: StudySurface(
                                     settings: c.appearance,
                                     color: colors.paper.withValues(
-                                      alpha: c.appearance.current.editorOpacity,
+                                      alpha: Platform.isWindows
+                                          ? 1
+                                          : c.appearance.current.editorOpacity,
                                     ),
+                                    // Match RichEdit's solid paper across the
+                                    // title, manuscript gutter and status bar.
+                                    texture: Platform.isWindows
+                                        ? StudyTexture.none
+                                        : null,
                                     child: c.activeChapter == null
                                         ? _EmptyChapter(controller: c)
                                         : Column(

@@ -8,9 +8,15 @@ import 'package:inkflow/features/appearance/theme_presets.dart';
 import 'package:inkflow/features/appearance/readability.dart';
 
 void main() {
-  for (final id in ['paper', 'night', 'forest']) {
+  for (final (id, texture) in [
+    ('paper', null),
+    ('night', null),
+    ('forest', null),
+    ('paper', StudyTexture.none),
+    ('night', StudyTexture.none),
+  ]) {
     testWidgets(
-      '$id surface draws only its quiet static texture with readable foregrounds',
+      '$id surface (${texture ?? 'theme texture'}) keeps readable foregrounds',
       (tester) async {
         final settings = AppearanceSettings(presetId: id);
         final palette = InkPalette.from(settings);
@@ -27,6 +33,7 @@ void main() {
                   child: StudySurface(
                     color: palette.paper,
                     settings: settings,
+                    texture: texture,
                     child: const SizedBox.expand(),
                   ),
                 ),
@@ -58,7 +65,10 @@ void main() {
             expect(colorContrast(ink, pixel), greaterThanOrEqualTo(4.5));
           }
         }
-        expect(changed, id == 'forest' ? 0 : greaterThan(100));
+        expect(
+          changed,
+          id == 'forest' || texture == StudyTexture.none ? 0 : greaterThan(100),
+        );
         await tester.pump(const Duration(seconds: 2));
         expect(tester.binding.hasScheduledFrame, isFalse);
       },

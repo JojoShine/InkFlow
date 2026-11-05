@@ -48,6 +48,15 @@ function Assert-Rendering($window,$editor,$name,$expected) {
     $paper=$bitmap.GetPixel($right-20,$bottom-20)
     $difference=[Math]::Max([Math]::Abs($paper.R-$expected[0]),[Math]::Max([Math]::Abs($paper.G-$expected[1]),[Math]::Abs($paper.B-$expected[2])))
     if ($difference -gt 2) { throw "$name background is $paper instead of $expected; native composition is incorrect." }
+    foreach ($point in @(
+      [Drawing.Point]::new($left+20,$top-20)
+      [Drawing.Point]::new($right+10,$top+100)
+      [Drawing.Point]::new($left+100,$bottom+15)
+    )) {
+      $surface=$bitmap.GetPixel($point.X,$point.Y)
+      $seam=[Math]::Max([Math]::Abs($surface.R-$paper.R),[Math]::Max([Math]::Abs($surface.G-$paper.G),[Math]::Abs($surface.B-$paper.B)))
+      if ($seam -gt 2) { throw "$name has a visible seam between native paper $paper and surrounding surface $surface." }
+    }
     $ink=0
     for ($y=$top+5; $y -lt [Math]::Min($top+100,$bottom-20); $y++) {
       for ($x=$left+20; $x -lt $right-20; $x++) {
