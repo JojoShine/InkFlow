@@ -8,8 +8,8 @@ import 'writing_statistics.dart';
 class EditorLayoutSettings {
   const EditorLayoutSettings({
     this.fontFamily = inkFontFamily,
-    this.fontSize = 20,
-    this.lineHeight = 1.8,
+    this.fontSize = 16,
+    this.lineHeight = 1.5,
     this.paragraphGap = 8,
     this.firstLineIndentEm = 2,
     this.maxWidth = 760,

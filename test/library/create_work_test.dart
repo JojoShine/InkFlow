@@ -90,7 +90,7 @@ void main() {
       expect(services.pickerCalls, 1);
       await createWork(tester, '春日来信');
       final first = c.work!.root;
-      expect(c.activeChapter!.title, '第一章');
+      expect(c.activeChapter!.title, '第1章');
       expect(first.parent.path, services.directory.path);
       expect(services.pickerCalls, 1);
       final returning = c.showLibrary();

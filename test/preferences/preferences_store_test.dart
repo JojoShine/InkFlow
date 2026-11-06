@@ -13,6 +13,25 @@ void main() {
   tearDown(() async {
     await dir.delete(recursive: true);
   });
+  test(
+    'fresh and missing layout values use 16 point text with 1.5 spacing',
+    () async {
+      final fresh = await PreferencesStore(dir).load();
+      expect(fresh.layout.fontSize, 16);
+      expect(fresh.layout.lineHeight, 1.5);
+      final data = fresh.toJson();
+      data['layout'] = <String, dynamic>{};
+      final fallback = DevicePreferences.fromJson(data);
+      expect(fallback.layout.fontSize, 16);
+      expect(fallback.layout.lineHeight, 1.5);
+      final customized = fresh.copyWith(
+        layout: const EditorLayoutSettings(fontSize: 24, lineHeight: 2),
+      );
+      final restored = DevicePreferences.fromJson(customized.toJson());
+      expect(restored.layout.fontSize, 24);
+      expect(restored.layout.lineHeight, 2);
+    },
+  );
   test('theme and typography round trip independently', () async {
     final store = PreferencesStore(dir);
     await store.save(

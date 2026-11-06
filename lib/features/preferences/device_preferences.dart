@@ -175,11 +175,11 @@ class DevicePreferences {
       ),
       layout: EditorLayoutSettings(
         fontFamily: layout['fontFamily'] as String? ?? inkFontFamily,
-        fontSize: ((layout['fontSize'] as num?)?.toDouble() ?? 20).clamp(
+        fontSize: ((layout['fontSize'] as num?)?.toDouble() ?? 16).clamp(
           12,
           36,
         ),
-        lineHeight: ((layout['lineHeight'] as num?)?.toDouble() ?? 1.8).clamp(
+        lineHeight: ((layout['lineHeight'] as num?)?.toDouble() ?? 1.5).clamp(
           1.2,
           2.6,
         ),

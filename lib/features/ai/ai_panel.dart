@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import '../../app/ink_icons.dart';
 import '../../app/ui_actions.dart';
 import '../appearance/theme_presets.dart';
@@ -94,6 +95,11 @@ class _AiPanelState extends State<AiPanel> {
   @override
   Widget build(BuildContext context) {
     final colors = InkPalette.of(context), attachment = ai.attachment;
+    final replyStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
+      fontSize: 14,
+      height: 1.9,
+      color: colors.ink,
+    );
     final stale = attachment?.isStale(widget.workbench) ?? false;
     return Container(
       width: widget.width,
@@ -220,9 +226,84 @@ class _AiPanelState extends State<AiPanel> {
                               ),
                             ),
                             const SizedBox(height: 6),
-                            SelectableText(
-                              turn.answer.isEmpty ? '…' : turn.answer,
-                              style: const TextStyle(fontSize: 14, height: 1.9),
+                            MarkdownBody(
+                              data: turn.answer.isEmpty ? '…' : turn.answer,
+                              selectable: true,
+                              fitContent: false,
+                              imageBuilder: (uri, title, alt) => SelectableText(
+                                '图片：${alt ?? title ?? uri.toString()}',
+                                style: replyStyle,
+                              ),
+                              styleSheet:
+                                  MarkdownStyleSheet.fromTheme(
+                                    Theme.of(context),
+                                  ).copyWith(
+                                    p: replyStyle,
+                                    h1: replyStyle.copyWith(
+                                      fontSize: 22,
+                                      height: 1.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    h2: replyStyle.copyWith(
+                                      fontSize: 20,
+                                      height: 1.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    h3: replyStyle.copyWith(
+                                      fontSize: 18,
+                                      height: 1.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    h4: replyStyle.copyWith(
+                                      fontSize: 16,
+                                      height: 1.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    h5: replyStyle.copyWith(
+                                      height: 1.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    h6: replyStyle.copyWith(
+                                      height: 1.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    listBullet: replyStyle,
+                                    tableHead: replyStyle.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    tableBody: replyStyle,
+                                    tableBorder: TableBorder.all(
+                                      color: colors.line,
+                                    ),
+                                    tableCellsPadding: const EdgeInsets.all(8),
+                                    blockquote: replyStyle.copyWith(
+                                      color: colors.muted,
+                                    ),
+                                    blockquoteDecoration: BoxDecoration(
+                                      border: Border(
+                                        left: BorderSide(
+                                          color: colors.line,
+                                          width: 3,
+                                        ),
+                                      ),
+                                    ),
+                                    code: replyStyle.copyWith(
+                                      fontFamily: 'monospace',
+                                      height: 1.5,
+                                    ),
+                                    codeblockDecoration: BoxDecoration(
+                                      color: colors.selection.withValues(
+                                        alpha: .4,
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    horizontalRuleDecoration: BoxDecoration(
+                                      border: Border(
+                                        top: BorderSide(color: colors.line),
+                                      ),
+                                    ),
+                                    blockSpacing: 12,
+                                  ),
                             ),
                             if (turn.answer.isNotEmpty)
                               Align(

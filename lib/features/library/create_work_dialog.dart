@@ -151,7 +151,7 @@ class _CreateWorkDialogState extends State<CreateWorkDialog> {
       if (_cover != null || work.manifest.coverFile != null) {
         await work.updateCover(_cover);
       }
-      if (work.manifest.chapterIds.isEmpty) await work.createChapter('第一章');
+      if (work.manifest.chapterIds.isEmpty) await work.createChapter('第1章');
       final bookmark = await controller.services.bookmark(root);
       await controller.openWork(root, bookmark: bookmark);
       if (mounted) Navigator.pop(context);
