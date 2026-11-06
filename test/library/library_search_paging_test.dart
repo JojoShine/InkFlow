@@ -65,37 +65,39 @@ void main() {
       .map((cover) => cover.entry.title)
       .toList();
 
-  testWidgets('eight compact cards per page use one fixed pagination footer', (
+  testWidgets('twelve smaller cards per page keep only pagination controls', (
     tester,
   ) async {
     await showLibrary(tester);
     expect(find.byTooltip('列表视图'), findsNothing);
     expect(find.byTooltip('卡片视图'), findsNothing);
-    expect(displayedTitles(tester), List.generate(8, (i) => '作品0${i + 1}'));
-    expect(find.text('共 19 本 · 每页 8 本'), findsOneWidget);
+    expect(
+      displayedTitles(tester),
+      List.generate(12, (i) => '作品${(i + 1).toString().padLeft(2, '0')}'),
+    );
+    expect(find.textContaining('每页'), findsNothing);
     final pagerBounds = tester.getRect(
       find.byKey(const ValueKey('library-pagination')),
     );
     await tester.tap(find.byKey(const ValueKey('library-next-page')));
     await tester.pumpAndSettle();
-    expect(displayedTitles(tester).first, '作品09');
-    expect(displayedTitles(tester).last, '作品16');
+    expect(displayedTitles(tester).first, '作品13');
+    expect(displayedTitles(tester).last, '作品19');
+    expect(displayedTitles(tester).length, 7);
     final card = find.byKey(
-      ValueKey('work-card-${controller.preferences.recentWorks[8].workId}'),
+      ValueKey('work-card-${controller.preferences.recentWorks[12].workId}'),
     );
     final cover = find.descendant(of: card, matching: find.byType(BookCover));
     final coverSize = tester.getSize(cover);
     expect(coverSize.width / coverSize.height, closeTo(2 / 3, .01));
-    expect(coverSize.width, lessThanOrEqualTo(160));
-    expect(tester.getSize(card).height, lessThanOrEqualTo(305));
+    expect(coverSize.width, lessThanOrEqualTo(128));
+    expect(tester.getSize(card).height, lessThanOrEqualTo(250));
     expect(tester.getRect(cover).left, closeTo(tester.getRect(card).left, .1));
     expect(
       tester.getRect(cover).right,
       closeTo(tester.getRect(card).right, .1),
     );
-    await tester.tap(find.byKey(const ValueKey('library-next-page')));
-    await tester.pumpAndSettle();
-    expect(displayedTitles(tester), ['作品17', '作品18', '作品19']);
+
     expect(
       tester
           .widget<OutlinedButton>(
@@ -131,7 +133,7 @@ void main() {
         expect(firstRow[i].left - firstRow[i - 1].right, closeTo(16, .1));
       }
       for (final rect in rects) {
-        expect(rect.width, lessThanOrEqualTo(160));
+        expect(rect.width, lessThanOrEqualTo(128));
         expect(rect.width / rect.height, closeTo(2 / 3, .01));
       }
       expect(tester.takeException(), isNull);
@@ -148,7 +150,7 @@ void main() {
       await tester.enterText(search, ' moon port ');
       await tester.pumpAndSettle();
       expect(displayedTitles(tester), ['作品17']);
-      expect(find.text('共 1 本 · 每页 8 本'), findsOneWidget);
+      expect(find.text('搜索结果 · 1 本'), findsOneWidget);
       await tester.enterText(search, '科幻');
       await tester.pumpAndSettle();
       expect(displayedTitles(tester), ['作品18']);
@@ -162,7 +164,7 @@ void main() {
       await tester.tap(find.byTooltip('清空搜索'));
       await tester.pumpAndSettle();
       expect(displayedTitles(tester).first, '作品01');
-      expect(displayedTitles(tester).length, 8);
+      expect(displayedTitles(tester).length, 12);
       expect(tester.takeException(), isNull);
     },
   );
@@ -235,7 +237,7 @@ void main() {
       controller.notifyListeners();
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(search).controller!.text, '作品');
-      expect(displayedTitles(tester).first, '作品09');
+      expect(displayedTitles(tester).first, '作品13');
     },
   );
 

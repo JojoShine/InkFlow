@@ -13,8 +13,8 @@ import '../../app/ink_icons.dart';
 import '../preferences/device_preferences.dart';
 
 const _bookCoverAspectRatio = 2 / 3;
-const _bookInfoHeight = 36.0;
-const _bookSynopsisHeight = 28.0;
+const _bookInfoHeight = 32.0;
+const _bookSynopsisHeight = 24.0;
 const _currentBookHeight = 160.0;
 
 class LibraryScreen extends StatefulWidget {
@@ -70,7 +70,7 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
-  static const _pageSize = 8;
+  static const _pageSize = 12;
   final _search = TextEditingController();
   final _scroll = ScrollController();
   int _page = 0;
@@ -214,33 +214,43 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               : LayoutBuilder(
                                   builder: (context, constraints) {
                                     final columns =
-                                        ((constraints.maxWidth + 16) / 160)
+                                        ((constraints.maxWidth + 16) / 144)
                                             .floor()
                                             .clamp(1, 6);
                                     final cardWidth =
                                         ((constraints.maxWidth -
                                                     16 * (columns - 1)) /
                                                 columns)
-                                            .clamp(0.0, 160.0);
+                                            .clamp(0.0, 128.0);
                                     final cardHeight =
                                         cardWidth / _bookCoverAspectRatio +
                                         _bookInfoHeight +
                                         _bookSynopsisHeight;
-                                    return Wrap(
-                                      key: const ValueKey('library-card-grid'),
-                                      spacing: 16,
-                                      runSpacing: 16,
-                                      children: [
-                                        for (final entry in pageEntries)
-                                          SizedBox(
-                                            width: cardWidth,
-                                            height: cardHeight,
-                                            child: _WorkCard(
-                                              controller: controller,
-                                              entry: entry,
-                                            ),
+                                    return Align(
+                                      alignment: Alignment.topLeft,
+                                      child: SizedBox(
+                                        width:
+                                            columns * cardWidth +
+                                            16 * (columns - 1),
+                                        child: Wrap(
+                                          key: const ValueKey(
+                                            'library-card-grid',
                                           ),
-                                      ],
+                                          spacing: 16,
+                                          runSpacing: 16,
+                                          children: [
+                                            for (final entry in pageEntries)
+                                              SizedBox(
+                                                width: cardWidth,
+                                                height: cardHeight,
+                                                child: _WorkCard(
+                                                  controller: controller,
+                                                  entry: entry,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
                                     );
                                   },
                                 ),
@@ -248,7 +258,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ),
                     ),
                   ),
-                  if (hasBooks) _pagination(colors, entries.length, pageCount),
+                  if (hasBooks) _pagination(colors, pageCount),
                   if (controller.preferences.libraryRootPath
                       case final String path) ...[
                     const SizedBox(height: 12),
@@ -494,7 +504,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     },
   );
 
-  Widget _pagination(InkPalette colors, int count, int pageCount) {
+  Widget _pagination(InkPalette colors, int pageCount) {
     final start = (_page - 2).clamp(0, (pageCount - 5).clamp(0, pageCount));
     return Container(
       key: const ValueKey('library-pagination'),
@@ -558,25 +568,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
             ],
           );
-          final total = Text(
-            '共 $count 本 · 每页 $_pageSize 本',
-            style: TextStyle(fontSize: 12, color: colors.muted),
-          );
-          return constraints.maxWidth >= 620
-              ? Row(
-                  children: [
-                    Expanded(child: total),
-                    controls,
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    total,
-                    const SizedBox(height: 8),
-                    Align(alignment: Alignment.centerRight, child: controls),
-                  ],
-                );
+          return Align(alignment: Alignment.centerRight, child: controls);
         },
       ),
     );
