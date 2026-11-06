@@ -76,6 +76,20 @@ void main() {
         final action = tester.getRect(
           find.widgetWithText(OutlinedButton, '继续写作'),
         );
+        final continueButton = find.widgetWithText(OutlinedButton, '继续写作');
+        final arrow = tester.getRect(
+          find.descendant(of: continueButton, matching: find.byType(Icon)),
+        );
+        expect(
+          arrow.left,
+          greaterThan(tester.getRect(find.text('继续写作')).right),
+        );
+        expect(
+          tester
+              .getSize(find.byKey(const ValueKey('current-work-card')))
+              .height,
+          greaterThanOrEqualTo(160),
+        );
         final trigger = tester.getRect(find.byTooltip('春日来信 的作品操作'));
         await tester.tap(find.byTooltip('春日来信 的作品操作'));
         await tester.pumpAndSettle();

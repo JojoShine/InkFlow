@@ -14,10 +14,14 @@ import '../preferences/device_preferences.dart';
 
 const _bookCoverHeight = 180.0;
 const _bookInfoHeight = 48.0;
+const _currentBookHeight = 160.0;
 
-class LibraryScreen extends StatelessWidget {
+class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key, required this.controller});
   final WorkbenchController controller;
+
+  @override
+  State<LibraryScreen> createState() => _LibraryScreenState();
 
   static Future<void> createNew(
     BuildContext context,
@@ -62,368 +66,572 @@ class LibraryScreen extends StatelessWidget {
       ),
     );
   });
+}
+
+class _LibraryScreenState extends State<LibraryScreen> {
+  static const _pageSize = 8;
+  final _search = TextEditingController();
+  final _scroll = ScrollController();
+  int _page = 0;
+  WorkbenchController get controller => widget.controller;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _showPage(int page) {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    setState(() => _page = page);
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = InkPalette.of(context);
     final current = controller.work;
-    final savedEntry = current == null
-        ? null
-        : controller.preferences.recentWorks
-                  .where((entry) => entry.path == current.root.path)
-                  .firstOrNull ??
-              RecentWork(
-                path: current.root.path,
-                workId: current.manifest.workId,
-                title: current.manifest.title,
-              );
     final currentEntry = current == null
         ? null
-        : savedEntry!
-              .withCover(current.manifest.coverFile)
-              .withDetails(current.manifest.details);
-    final recentWorks = controller.preferences.recentWorks
-        .where((recent) => recent.path != current?.root.path)
+        : (controller.preferences.recentWorks
+                      .where((entry) => entry.path == current.root.path)
+                      .firstOrNull ??
+                  RecentWork(
+                    path: current.root.path,
+                    workId: current.manifest.workId,
+                    title: current.manifest.title,
+                  ))
+              .withManifest(current.manifest);
+    final query = _search.text.trim().toLowerCase();
+    final searching = query.isNotEmpty;
+    final otherWorks = controller.preferences.recentWorks
+        .where((entry) => entry.path != current?.root.path)
         .toList();
+    final entries = searching
+        ? [?currentEntry, ...otherWorks]
+              .where(
+                (entry) =>
+                    entry.title.toLowerCase().contains(query) ||
+                    entry.details.synopsis.toLowerCase().contains(query) ||
+                    entry.details.tags.any(
+                      (tag) => tag.toLowerCase().contains(query),
+                    ),
+              )
+              .toList()
+        : otherWorks;
+    final pageCount = (entries.length / _pageSize).ceil();
+    _page = _page.clamp(0, pageCount == 0 ? 0 : pageCount - 1);
+    final pageEntries = entries
+        .skip(_page * _pageSize)
+        .take(_pageSize)
+        .toList();
+    final hasBooks = currentEntry != null || otherWorks.isNotEmpty;
+
     return StudySurface(
       settings: controller.appearance,
       color: colors.background.withValues(alpha: .92),
-      child: Stack(
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 780),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(48, 72, 48, 80),
+      child: LayoutBuilder(
+        builder: (context, constraints) => Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1120),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                constraints.maxWidth < 640 ? 24 : 48,
+                28,
+                constraints.maxWidth < 640 ? 24 : 48,
+                16,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('书架', style: TextStyle(fontSize: 34, color: colors.ink)),
-                  const SizedBox(height: 12),
-                  Text(
-                    '让故事，从这里继续。',
-                    style: TextStyle(fontSize: 17, color: colors.muted),
-                  ),
-                  const SizedBox(height: 30),
-                  if (controller.preferences.libraryRootPath == null)
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: colors.paper,
-                        border: Border.all(color: colors.line),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      key: const ValueKey('library-results'),
+                      controller: _scroll,
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Text('先设置作品书库', style: TextStyle(fontSize: 21)),
-                          const SizedBox(height: 12),
-                          Text(
-                            '选择或新建一个保存作品的文件夹。以后每本作品都会在这里生成独立文件夹，只需设置一次。',
-                            style: TextStyle(color: colors.muted, height: 1.8),
-                          ),
-                          const SizedBox(height: 20),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              FilledButton.icon(
-                                onPressed: () => uiAction(context, () async {
-                                  await controller.chooseLibraryRoot();
-                                }),
-                                icon: const Icon(InkIcons.folderOpen),
-                                label: const Text('选择书库文件夹'),
+                          _header(colors),
+                          if (controller.preferences.libraryRootPath ==
+                              null) ...[
+                            const SizedBox(height: 24),
+                            _setup(colors),
+                          ],
+                          if (currentEntry != null && !searching) ...[
+                            const SizedBox(height: 24),
+                            _currentWork(colors, currentEntry),
+                          ],
+                          if (hasBooks) ...[
+                            const SizedBox(height: 24),
+                            _toolbar(
+                              colors,
+                              searching
+                                  ? '搜索结果'
+                                  : current == null
+                                  ? '全部作品'
+                                  : '其他作品',
+                              entries.length,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          entries.isEmpty
+                              ? Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 32,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        searching
+                                            ? '没有找到匹配的作品'
+                                            : hasBooks
+                                            ? '其他作品会显示在这里。'
+                                            : controller
+                                                      .preferences
+                                                      .libraryRootPath ==
+                                                  null
+                                            ? '选好书库后，就可以开始写第一部作品。'
+                                            : '作品保存在所选书库中，离线也能安心写作。',
+                                        style: TextStyle(
+                                          color: colors.muted,
+                                          height: 1.8,
+                                        ),
+                                      ),
+                                      if (searching)
+                                        TextButton(
+                                          onPressed: () {
+                                            _search.clear();
+                                            _showPage(0);
+                                          },
+                                          child: const Text('清空搜索条件'),
+                                        ),
+                                    ],
+                                  ),
+                                )
+                              : controller.preferences.libraryView ==
+                                    LibraryView.list
+                              ? Column(
+                                  children: [
+                                    for (final entry in pageEntries) ...[
+                                      _WorkListItem(
+                                        controller: controller,
+                                        entry: entry,
+                                      ),
+                                      Divider(
+                                        height: 1,
+                                        color: colors.line.withValues(
+                                          alpha: .55,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                )
+                              : LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final columns =
+                                        ((constraints.maxWidth + 20) / 220)
+                                            .floor()
+                                            .clamp(1, 4);
+                                    return GridView.builder(
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      padding: EdgeInsets.zero,
+                                      itemCount: pageEntries.length,
+                                      gridDelegate:
+                                          SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: columns,
+                                            crossAxisSpacing: 20,
+                                            mainAxisSpacing: 20,
+                                            mainAxisExtent:
+                                                _bookCoverHeight +
+                                                _bookInfoHeight +
+                                                44,
+                                          ),
+                                      itemBuilder: (_, index) => _WorkCard(
+                                        controller: controller,
+                                        entry: pageEntries[index],
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (hasBooks) _pagination(colors, entries.length, pageCount),
+                  if (controller.preferences.libraryRootPath
+                      case final String path) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Row(
+                        key: const ValueKey('library-location'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(InkIcons.folder, size: 14, color: colors.muted),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              '书库位置 · $path',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: colors.muted,
+                                fontSize: 12,
                               ),
-                              TextButton(
-                                onPressed: () =>
-                                    openExisting(context, controller),
-                                child: const Text('打开已有作品'),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
-                    )
-                  else
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: () => createNew(context, controller),
-                          icon: const Icon(InkIcons.add, size: 18),
-                          label: const Text('新建作品'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () => openExisting(context, controller),
-                          icon: const Icon(InkIcons.folderOpen, size: 18),
-                          label: const Text('打开作品文件夹'),
-                        ),
-                      ],
                     ),
-                  if (current != null) ...[
-                    const SizedBox(height: 36),
-                    Text(
-                      '当前作品',
-                      style: TextStyle(fontSize: 13, color: colors.muted),
-                    ),
-                    const SizedBox(height: 12),
-                    Material(
-                      key: const ValueKey('current-work-card'),
-                      color: colors.paper,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: colors.line),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: SizedBox(
-                        height: 196,
-                        child: Row(
-                          children: [
-                            BookCover(
-                              entry: currentEntry!,
-                              services: controller.services,
-                              width: 196 / 1.5,
-                              height: 196,
-                              borderRadius: BorderRadius.zero,
-                            ),
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 16,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            current.manifest.title,
-                                            style: const TextStyle(
-                                              fontSize: 21,
-                                            ),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          if (current
-                                                  .manifest
-                                                  .details
-                                                  .tags
-                                                  .isNotEmpty ||
-                                              current
-                                                      .manifest
-                                                      .details
-                                                      .audience !=
-                                                  '不限') ...[
-                                            const SizedBox(height: 6),
-                                            Text(
-                                              [
-                                                if (current
-                                                        .manifest
-                                                        .details
-                                                        .audience !=
-                                                    '不限')
-                                                  current
-                                                      .manifest
-                                                      .details
-                                                      .audience,
-                                                ...current
-                                                    .manifest
-                                                    .details
-                                                    .tags,
-                                              ].join(' · '),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: colors.muted,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ],
-                                          if (controller.activeChapter !=
-                                              null) ...[
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              '上次写到 · ${controller.activeChapter!.title}',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: colors.muted,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                          ],
-                                          if (current
-                                              .manifest
-                                              .details
-                                              .synopsis
-                                              .isNotEmpty) ...[
-                                            const SizedBox(height: 10),
-                                            _WorkSynopsis(
-                                              text: current
-                                                  .manifest
-                                                  .details
-                                                  .synopsis,
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    OutlinedButton.icon(
-                                      onPressed: controller.hideLibrary,
-                                      icon: const Icon(InkIcons.edit),
-                                      label: const Text('继续写作'),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _WorkItemMenu(
-                                      controller: controller,
-                                      entry: currentEntry,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 36),
-                  if (current == null && recentWorks.isEmpty)
-                    Text(
-                      controller.preferences.libraryRootPath == null
-                          ? '选好书库后，就可以开始写第一部作品。'
-                          : '作品保存在所选书库中，离线也能安心写作。',
-                      style: TextStyle(color: colors.muted, height: 1.8),
-                    ),
-                  if (recentWorks.isNotEmpty) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            current == null ? '最近作品' : '其他作品',
-                            style: TextStyle(fontSize: 13, color: colors.muted),
-                          ),
-                        ),
-                        for (final view in LibraryView.values)
-                          IconButton(
-                            tooltip: view == LibraryView.list ? '列表视图' : '卡片视图',
-                            isSelected:
-                                controller.preferences.libraryView == view,
-                            style: IconButton.styleFrom(
-                              minimumSize: const Size(32, 32),
-                              fixedSize: const Size(32, 32),
-                              padding: EdgeInsets.zero,
-                              backgroundColor:
-                                  controller.preferences.libraryView == view
-                                  ? colors.selection
-                                  : Colors.transparent,
-                              foregroundColor:
-                                  controller.preferences.libraryView == view
-                                  ? colors.accent
-                                  : colors.muted,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(5),
-                              ),
-                            ),
-                            onPressed: () => controller.updateLibraryView(view),
-                            icon: Icon(
-                              view == LibraryView.list
-                                  ? InkIcons.list
-                                  : InkIcons.grid,
-                              size: 16,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (controller.preferences.libraryView == LibraryView.list)
-                      for (final entry in recentWorks) ...[
-                        _WorkListItem(controller: controller, entry: entry),
-                        Divider(height: 1, color: colors.line),
-                      ]
-                    else
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final count = ((constraints.maxWidth + 20) / 152)
-                              .floor()
-                              .clamp(1, 4);
-                          return GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            padding: EdgeInsets.zero,
-                            itemCount: recentWorks.length,
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: count,
-                                  crossAxisSpacing: 20,
-                                  mainAxisSpacing: 20,
-                                  mainAxisExtent:
-                                      _bookCoverHeight +
-                                      _bookInfoHeight +
-                                      (recentWorks.any(
-                                            (entry) => entry
-                                                .details
-                                                .synopsis
-                                                .isNotEmpty,
-                                          )
-                                          ? 44
-                                          : 0),
-                                ),
-                            itemBuilder: (_, index) => _WorkCard(
-                              controller: controller,
-                              entry: recentWorks[index],
-                            ),
-                          );
-                        },
-                      ),
                   ],
                 ],
               ),
             ),
           ),
-          if (controller.preferences.libraryRootPath case final String path)
-            Positioned(
-              bottom: 16,
-              right: 24,
-              left: 24,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Container(
-                  key: const ValueKey('library-location'),
-                  constraints: const BoxConstraints(maxWidth: 540),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
+        ),
+      ),
+    );
+  }
+
+  Widget _header(InkPalette colors) => LayoutBuilder(
+    builder: (context, constraints) {
+      final title = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('书架', style: TextStyle(fontSize: 32, color: colors.ink)),
+          const SizedBox(height: 8),
+          Text(
+            '让故事，从这里继续。',
+            style: TextStyle(fontSize: 16, color: colors.muted),
+          ),
+        ],
+      );
+      final actions = Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          FilledButton.icon(
+            onPressed: () => LibraryScreen.createNew(context, controller),
+            icon: const Icon(InkIcons.add, size: 18),
+            label: const Text('新建作品'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => LibraryScreen.openExisting(context, controller),
+            icon: const Icon(InkIcons.folderOpen, size: 18),
+            label: const Text('打开作品文件夹'),
+          ),
+        ],
+      );
+      if (controller.preferences.libraryRootPath == null) return title;
+      return constraints.maxWidth >= 620
+          ? Row(
+              children: [
+                Expanded(child: title),
+                const SizedBox(width: 20),
+                actions,
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [title, const SizedBox(height: 20), actions],
+            );
+    },
+  );
+
+  Widget _setup(InkPalette colors) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: colors.background.withValues(alpha: .7),
+      border: Border.all(color: colors.line.withValues(alpha: .55)),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('先设置作品书库', style: TextStyle(fontSize: 21)),
+        const SizedBox(height: 10),
+        Text(
+          '选择或新建一个保存作品的文件夹。以后每本作品都会在这里生成独立文件夹，只需设置一次。',
+          style: TextStyle(color: colors.muted, height: 1.8),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton.icon(
+              onPressed: () => uiAction(context, () async {
+                await controller.chooseLibraryRoot();
+              }),
+              icon: const Icon(InkIcons.folderOpen),
+              label: const Text('选择书库文件夹'),
+            ),
+            TextButton(
+              onPressed: () => LibraryScreen.openExisting(context, controller),
+              child: const Text('打开已有作品'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  Widget _currentWork(InkPalette colors, RecentWork entry) => LayoutBuilder(
+    builder: (context, constraints) => Material(
+      key: const ValueKey('current-work-card'),
+      color: colors.background.withValues(alpha: .7),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: colors.line.withValues(alpha: .55)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: _currentBookHeight,
+        child: Row(
+          children: [
+            BookCover(
+              entry: entry,
+              services: controller.services,
+              width: _currentBookHeight / 1.5,
+              height: _currentBookHeight,
+              borderRadius: BorderRadius.zero,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '当前作品',
+                    style: TextStyle(fontSize: 12, color: colors.muted),
                   ),
-                  decoration: BoxDecoration(
-                    color: colors.background,
-                    borderRadius: BorderRadius.circular(6),
+                  const SizedBox(height: 4),
+                  Text(
+                    entry.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 21),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(InkIcons.folder, size: 14, color: colors.muted),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          '书库位置 · $path',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: colors.muted, fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
+                  if (controller.activeChapter != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '上次写到 · ${controller.activeChapter!.title}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: colors.muted),
+                    ),
+                  ],
+                  if (entry.details.synopsis.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      entry.details.synopsis,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: colors.muted),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (constraints.maxWidth >= 560)
+              OutlinedButton.icon(
+                onPressed: controller.hideLibrary,
+                iconAlignment: IconAlignment.end,
+                label: const Text('继续写作'),
+                icon: const Icon(InkIcons.chevronRight, size: 16),
+              )
+            else
+              IconButton(
+                onPressed: controller.hideLibrary,
+                tooltip: '继续写作',
+                icon: const Icon(InkIcons.edit, size: 18),
+              ),
+            const SizedBox(width: 16),
+            _WorkItemMenu(controller: controller, entry: entry),
+            const SizedBox(width: 16),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _toolbar(InkPalette colors, String title, int count) => LayoutBuilder(
+    builder: (context, constraints) {
+      final label = Text(
+        '$title · $count 本',
+        style: TextStyle(fontSize: 13, color: colors.muted),
+      );
+      final search = TextField(
+        key: const ValueKey('library-search'),
+        controller: _search,
+        onChanged: (_) => _showPage(0),
+        style: const TextStyle(fontSize: 14),
+        decoration: InputDecoration(
+          hintText: '搜索书名、简介或标签',
+          prefixIcon: const Icon(InkIcons.search, size: 18),
+          suffixIcon: _search.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: '清空搜索',
+                  icon: const Icon(InkIcons.close, size: 16),
+                  onPressed: () {
+                    _search.clear();
+                    _showPage(0);
+                  },
                 ),
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
+        ),
+      );
+      final views = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final view in LibraryView.values)
+            IconButton(
+              tooltip: view == LibraryView.list ? '列表视图' : '卡片视图',
+              isSelected: controller.preferences.libraryView == view,
+              style: IconButton.styleFrom(
+                minimumSize: const Size(32, 32),
+                fixedSize: const Size(32, 32),
+                padding: EdgeInsets.zero,
+                backgroundColor: controller.preferences.libraryView == view
+                    ? colors.selection
+                    : Colors.transparent,
+                foregroundColor: controller.preferences.libraryView == view
+                    ? colors.accent
+                    : colors.muted,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+              onPressed: () {
+                if (_scroll.hasClients) _scroll.jumpTo(0);
+                controller.updateLibraryView(view);
+              },
+              icon: Icon(
+                view == LibraryView.list ? InkIcons.list : InkIcons.grid,
+                size: 16,
               ),
             ),
         ],
+      );
+      return constraints.maxWidth >= 620
+          ? Row(
+              children: [
+                Expanded(child: label),
+                SizedBox(width: 320, child: search),
+                const SizedBox(width: 12),
+                views,
+              ],
+            )
+          : Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: label),
+                    views,
+                  ],
+                ),
+                const SizedBox(height: 12),
+                search,
+              ],
+            );
+    },
+  );
+
+  Widget _pagination(InkPalette colors, int count, int pageCount) {
+    final start = (_page - 2).clamp(0, (pageCount - 5).clamp(0, pageCount));
+    return Container(
+      key: const ValueKey('library-pagination'),
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.only(top: 12),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: colors.line.withValues(alpha: .55)),
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final controls = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OutlinedButton(
+                key: const ValueKey('library-previous-page'),
+                onPressed: _page == 0 ? null : () => _showPage(_page - 1),
+                child: const Text('上一页'),
+              ),
+              const SizedBox(width: 8),
+              if (constraints.maxWidth >= 620)
+                for (var p = start; p < pageCount && p < start + 5; p++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: TextButton(
+                        key: ValueKey('library-page-${p + 1}'),
+                        onPressed: () => _showPage(p),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          backgroundColor: p == _page
+                              ? colors.accent
+                              : Colors.transparent,
+                          foregroundColor: p == _page
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : colors.muted,
+                        ),
+                        child: Text('${p + 1}'),
+                      ),
+                    ),
+                  )
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    '${pageCount == 0 ? 0 : _page + 1} / $pageCount',
+                    style: TextStyle(color: colors.muted, fontSize: 12),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                key: const ValueKey('library-next-page'),
+                onPressed: _page + 1 >= pageCount
+                    ? null
+                    : () => _showPage(_page + 1),
+                child: const Text('下一页'),
+              ),
+            ],
+          );
+          final total = Text(
+            '共 $count 本 · 每页 $_pageSize 本',
+            style: TextStyle(fontSize: 12, color: colors.muted),
+          );
+          return constraints.maxWidth >= 620
+              ? Row(
+                  children: [
+                    Expanded(child: total),
+                    controls,
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    total,
+                    const SizedBox(height: 8),
+                    Align(alignment: Alignment.centerRight, child: controls),
+                  ],
+                );
+        },
       ),
     );
   }
@@ -434,6 +642,10 @@ Future<void> _openRecent(
   WorkbenchController controller,
   RecentWork entry,
 ) => uiAction(context, () async {
+  if (entry.path == controller.work?.root.path) {
+    controller.hideLibrary();
+    return;
+  }
   final root = await controller.services.resolveDirectory(
     entry.path,
     entry.bookmark,
@@ -539,10 +751,10 @@ class _WorkCard extends StatelessWidget {
     final colors = InkPalette.of(context);
     return Material(
       key: ValueKey('work-card-${entry.workId}'),
-      color: colors.paper,
+      color: colors.background.withValues(alpha: .7),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: colors.line),
+        side: BorderSide(color: colors.line.withValues(alpha: .55)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

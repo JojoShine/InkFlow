@@ -163,10 +163,19 @@ class WorkbenchScreen extends StatelessWidget {
                     ),
                   ),
                 Expanded(
-                  child: c.busy && (c.libraryVisible || c.work == null)
-                      ? const Center(child: CircularProgressIndicator())
-                      : c.libraryVisible || c.work == null
-                      ? LibraryScreen(controller: c)
+                  child: c.libraryVisible || c.work == null
+                      ? Stack(
+                          children: [
+                            Positioned.fill(
+                              child: AbsorbPointer(
+                                absorbing: c.busy,
+                                child: LibraryScreen(controller: c),
+                              ),
+                            ),
+                            if (c.busy)
+                              const Center(child: CircularProgressIndicator()),
+                          ],
+                        )
                       : LayoutBuilder(
                           builder: (context, size) {
                             final leftWidth = c.preferences.chapterPanelWidth

@@ -39,6 +39,7 @@ abstract final class InkIcons {
   static const format = CupertinoIcons.text_alignleft;
   static const share = CupertinoIcons.square_arrow_up;
   static const save = CupertinoIcons.floppy_disk;
+  static const search = CupertinoIcons.search;
   static const sync = CupertinoIcons.arrow_2_circlepath;
   static const sidebar = CupertinoIcons.sidebar_left;
   static const sidebarRight = CupertinoIcons.sidebar_right;

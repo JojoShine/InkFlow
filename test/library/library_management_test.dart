@@ -47,7 +47,10 @@ void main() {
       final location = tester.getRect(
         find.byKey(const ValueKey('library-location')),
       );
-      expect(location.right, closeTo(1076, 1));
+      final currentCard = tester.getRect(
+        find.byKey(const ValueKey('current-work-card')),
+      );
+      expect(location.right, closeTo(currentCard.right, 1));
       expect(location.bottom, closeTo(784, 1));
       await tester.tap(find.byTooltip('春日来信 的作品操作'));
       await tester.pumpAndSettle();
