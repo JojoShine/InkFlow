@@ -49,6 +49,7 @@ class _AiPanelState extends State<AiPanel> {
 
   Future<void> _send() async {
     if (ai.busy) return;
+    if (input.text.trim().isEmpty && ai.attachment == null) return;
     if (ai.workKey != widget.workbench.workKey) {
       ai.failure = '正在切换作品，请加载完成后发送';
       setState(() {});
@@ -66,7 +67,7 @@ class _AiPanelState extends State<AiPanel> {
       await ai.newConversation();
       return;
     }
-    await ai.send(input.text);
+    await ai.send(input.text.trim().isEmpty ? ai.purpose.draft : input.text);
   }
 
   Future<void> _attach(AiContextSource source) async {
@@ -126,7 +127,7 @@ class _AiPanelState extends State<AiPanel> {
                 IconButton(
                   tooltip: 'AI 连接设置',
                   onPressed: ai.busy ? null : () => showAiSettings(context, ai),
-                  icon: const Icon(InkIcons.appearance, size: 17),
+                  icon: const Icon(InkIcons.aiSettings, size: 18),
                 ),
                 IconButton(
                   tooltip: '新对话',
@@ -143,7 +144,7 @@ class _AiPanelState extends State<AiPanel> {
                             await ai.newConversation();
                           }
                         }),
-                  icon: const Icon(InkIcons.add, size: 17),
+                  icon: const Icon(InkIcons.newChat, size: 18),
                 ),
               ],
             ),
@@ -280,48 +281,105 @@ class _AiPanelState extends State<AiPanel> {
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-            child: Wrap(
-              spacing: 4,
-              children: [
-                for (final purpose in AiPurpose.values)
-                  TextButton(
-                    onPressed: () {
-                      ai.purpose = purpose;
-                      ai.draft = purpose.draft;
-                      input.text = ai.draft;
-                      setState(() {});
-                      focus.requestFocus();
-                    },
-                    child: Text(
-                      purpose.label,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-              ],
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: colors.line),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    for (final purpose in AiPurpose.values)
+                      Expanded(
+                        child: Semantics(
+                          key: ValueKey('ai-purpose-${purpose.name}'),
+                          selected: ai.purpose == purpose,
+                          button: true,
+                          child: InkWell(
+                            onTap: () {
+                              setState(() => ai.purpose = purpose);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 9),
+                              color: ai.purpose == purpose
+                                  ? colors.selection
+                                  : Colors.transparent,
+                              child: Text(
+                                purpose.label,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: ai.purpose == purpose
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: ai.purpose == purpose
+                                      ? colors.accent
+                                      : colors.muted,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+            child: Text(
+              '参考内容',
+              style: TextStyle(fontSize: 11, color: colors.muted),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Wrap(
-              spacing: 4,
+              spacing: 6,
+              runSpacing: 4,
               children: [
-                TextButton(
-                  onPressed: () => setState(() => ai.attachment = null),
-                  child: const Text('仅对话', style: TextStyle(fontSize: 11)),
-                ),
-                TextButton(
-                  onPressed: widget.workbench.chapterLoading
-                      ? null
-                      : () => _attach(AiContextSource.selection),
-                  child: const Text('选中文字', style: TextStyle(fontSize: 11)),
-                ),
-                TextButton(
-                  onPressed: widget.workbench.chapterLoading
-                      ? null
-                      : () => _attach(AiContextSource.chapter),
-                  child: const Text('当前章节', style: TextStyle(fontSize: 11)),
-                ),
+                for (final source in AiContextSource.values)
+                  ChoiceChip(
+                    key: ValueKey('ai-source-${source.name}'),
+                    label: Text(const ['不附正文', '选中片段', '当前章节'][source.index]),
+                    selected:
+                        (attachment?.source ?? AiContextSource.conversation) ==
+                        source,
+                    showCheckmark: false,
+                    selectedColor: colors.selection,
+                    side: BorderSide(
+                      color:
+                          (attachment?.source ??
+                                  AiContextSource.conversation) ==
+                              source
+                          ? colors.accent
+                          : colors.line,
+                    ),
+                    labelStyle: TextStyle(
+                      fontSize: 11,
+                      color:
+                          (attachment?.source ??
+                                  AiContextSource.conversation) ==
+                              source
+                          ? colors.accent
+                          : colors.muted,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
+                    onSelected:
+                        source != AiContextSource.conversation &&
+                            (widget.workbench.chapterLoading ||
+                                widget.workbench.activeChapterId == null)
+                        ? null
+                        : (_) => _attach(source),
+                  ),
               ],
             ),
           ),
@@ -338,6 +396,11 @@ class _AiPanelState extends State<AiPanel> {
                           '${attachment.chapterTitle} · ${attachment.characterCount} 字符',
                           style: const TextStyle(fontSize: 11),
                         ),
+                      ),
+                      IconButton(
+                        tooltip: '移除附加内容',
+                        icon: const Icon(InkIcons.close, size: 14),
+                        onPressed: () => setState(() => ai.attachment = null),
                       ),
                       TextButton(
                         onPressed: () => showDialog<void>(
@@ -388,9 +451,13 @@ class _AiPanelState extends State<AiPanel> {
                 focusNode: focus,
                 minLines: 2,
                 maxLines: 4,
-                onChanged: (text) => ai.draft = text,
-                decoration: const InputDecoration(
-                  hintText: '写下想讨论的问题，或粘贴一段内容…',
+                onChanged: (text) => setState(() => ai.draft = text),
+                decoration: InputDecoration(
+                  hintText: switch (ai.purpose) {
+                    AiPurpose.organize => '写下想讨论的问题，或记录零散想法…',
+                    AiPurpose.evaluate => '粘贴内容，或附加正文后说明想评价的方面…',
+                    AiPurpose.summarize => '附加正文，或粘贴需要总结的内容…',
+                  },
                   border: OutlineInputBorder(),
                 ),
                 style: const TextStyle(fontSize: 13, height: 1.6),
@@ -398,22 +465,39 @@ class _AiPanelState extends State<AiPanel> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+            child: Text(
+              '包含当前对话中已发送的历史内容',
+              style: TextStyle(fontSize: 10, color: colors.muted),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
-                    '包含当前对话历史 · 正文仅主动附加',
+                    'Enter 发送\nShift+Enter 换行',
                     style: TextStyle(fontSize: 10, color: colors.muted),
                   ),
                 ),
-                TextButton(
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(76, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  icon: Icon(
+                    ai.busy ? InkIcons.close : InkIcons.send,
+                    size: 14,
+                  ),
                   onPressed: ai.loadingConversation
                       ? null
                       : ai.busy
                       ? ai.stop
-                      : _send,
-                  child: Text(
+                      : input.text.trim().isNotEmpty || attachment != null
+                      ? _send
+                      : null,
+                  label: Text(
                     ai.loadingConversation
                         ? '读取中'
                         : ai.busy

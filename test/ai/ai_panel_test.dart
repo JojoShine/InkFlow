@@ -6,11 +6,12 @@ import 'dart:ui' as ui;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkflow/app/inkflow_app.dart';
 import 'package:inkflow/features/ai/ai_panel.dart';
+import 'package:inkflow/features/ai/ai_context.dart';
 import 'package:inkflow/features/workbench/workbench_controller.dart';
 import 'package:inkflow/features/works/work_repository.dart';
 
 void main() {
-  testWidgets('AI tab is reachable and a quick action only fills a draft', (
+  testWidgets('AI modes preserve the draft and show the selected context', (
     tester,
   ) async {
     if (Platform.environment['INKFLOW_UI_CAPTURE'] != null) {
@@ -75,11 +76,34 @@ void main() {
       });
     }
 
-    await tester.tap(find.text('整理思路'));
+    final composer = find.byType(TextField).last;
+    await tester.enterText(composer, '我已经写好的讨论问题');
+    await tester.tap(find.text('评价内容'));
     await tester.pump();
-    expect(c.ai.draft, isNotEmpty);
+    expect(c.ai.draft, '我已经写好的讨论问题');
+    expect(c.ai.purpose, AiPurpose.evaluate);
+    expect(
+      tester
+          .widget<Semantics>(find.byKey(const ValueKey('ai-purpose-evaluate')))
+          .properties
+          .selected,
+      isTrue,
+    );
+    await tester.tap(find.text('当前章节'));
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ChoiceChip>(find.byKey(const ValueKey('ai-source-chapter')))
+          .selected,
+      isTrue,
+    );
+    await tester.tap(find.byTooltip('移除附加内容'));
+    await tester.pump();
+    expect(c.ai.attachment, isNull);
     expect(c.ai.turns, isEmpty);
     expect(c.session.controller.text, '原稿');
+    await tester.tap(composer);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     expect(

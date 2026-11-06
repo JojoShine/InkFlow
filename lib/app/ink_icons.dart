@@ -29,6 +29,9 @@ abstract final class InkIcons {
   static const book = CupertinoIcons.book;
   static const more = CupertinoIcons.ellipsis;
   static const appearance = CupertinoIcons.paintbrush;
+  static const aiSettings = CupertinoIcons.gear_alt;
+  static const newChat = CupertinoIcons.plus_bubble;
+  static const send = CupertinoIcons.paperplane;
   static const person = CupertinoIcons.person;
   static const statistics = CupertinoIcons.chart_bar;
   static const minus = CupertinoIcons.minus;
