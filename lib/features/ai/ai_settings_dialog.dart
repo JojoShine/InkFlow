@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../app/labeled_field.dart';
 import '../../app/ink_icons.dart';
@@ -77,11 +78,9 @@ class _AiSettingsDialogState extends State<_AiSettingsDialog> {
     checkingKey = true;
     if (mounted) setState(() {});
     try {
-      final exists =
-          (await widget.controller.credentials.read(
-            value.credentialId,
-          ))?.isNotEmpty ??
-          false;
+      final exists = await widget.controller.credentials.contains(
+        value.credentialId,
+      );
       if (!mounted || lookup != _keyLookup) return;
       setState(() {
         savedKey = exists;
@@ -182,7 +181,7 @@ class _AiSettingsDialogState extends State<_AiSettingsDialog> {
     } on FormatException catch (error) {
       if (mounted) setState(() => message = error.message.toString());
     } catch (_) {
-      if (mounted) setState(() => message = '系统凭据或配置保存失败，请检查后重试');
+      if (mounted) setState(() => message = '密钥或配置保存失败，请检查后重试');
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -353,7 +352,9 @@ class _AiSettingsDialogState extends State<_AiSettingsDialog> {
               ],
               const SizedBox(height: 12),
               Text(
-                '保存仅写入本机；测试会向当前服务商发送一条短消息，可能产生调用费用。',
+                Platform.isMacOS
+                    ? '密钥以明文保存在本机应用私有目录，不随作品同步。保存不会联网；测试会发送短消息，可能产生调用费用。'
+                    : '密钥仅保存在本机，不随作品同步。保存不会联网；测试会发送短消息，可能产生调用费用。',
                 style: TextStyle(
                   fontSize: 12,
                   color: colors.muted,

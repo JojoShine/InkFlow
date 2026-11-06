@@ -15,13 +15,14 @@ AiCredentials::AiCredentials(flutter::BinaryMessenger* messenger) {
     if(!id||id->size()!=64||!std::all_of(id->begin(),id->end(),[](char c){return(c>='a'&&c<='f')||(c>='0'&&c<='9');})){result->Error("invalid","凭据标识不合法");return;}
     const auto name=std::string("InkFlow.AI.")+*id;
     std::wstring target(name.begin(),name.end());
-    if(call.method_name()=="read"){
+    if(call.method_name()=="read"||call.method_name()=="contains"){
       PCREDENTIALW credential=nullptr;
       if(CredReadW(target.c_str(),CRED_TYPE_GENERIC,0,&credential)){
+        if(call.method_name()=="contains"){const bool exists=credential->CredentialBlobSize>0;CredFree(credential);result->Success(Value(exists));return;}
         std::string key(reinterpret_cast<char*>(credential->CredentialBlob),credential->CredentialBlobSize);
         CredFree(credential);result->Success(Value(key));return;
       }
-      if(GetLastError()==ERROR_NOT_FOUND){result->Success();return;}
+      if(GetLastError()==ERROR_NOT_FOUND){if(call.method_name()=="contains")result->Success(Value(false));else result->Success();return;}
     }else if(call.method_name()=="delete"){
       if(CredDeleteW(target.c_str(),CRED_TYPE_GENERIC,0)||GetLastError()==ERROR_NOT_FOUND){result->Success();return;}
     }else if(call.method_name()=="write"){

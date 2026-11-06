@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:inkflow/app/inkflow_app.dart';
 import 'package:inkflow/features/ai/ai_panel.dart';
 import 'package:inkflow/features/ai/ai_context.dart';
+import 'package:inkflow/features/appearance/readability.dart';
 import 'package:inkflow/features/workbench/workbench_controller.dart';
 import 'package:inkflow/features/works/work_repository.dart';
 
@@ -88,6 +89,21 @@ void main() {
 
     final composer = find.byType(TextField).last;
     await tester.enterText(composer, '我已经写好的讨论问题');
+    await tester.pumpAndSettle();
+    final send = find.byWidgetPredicate(
+      (widget) => widget is IconButton && widget.tooltip == '发送（Enter）',
+    );
+    final surface = tester
+        .widget<Material>(
+          find.descendant(of: send, matching: find.byType(Material)).first,
+        )
+        .color!;
+    final iconColor = IconTheme.of(
+      tester.element(
+        find.descendant(of: send, matching: find.byType(Icon)).first,
+      ),
+    ).color!;
+    expect(colorContrast(iconColor, surface), greaterThanOrEqualTo(4.5));
     await tester.tap(find.text('评价内容'));
     await tester.pump();
     expect(c.ai.draft, '我已经写好的讨论问题');

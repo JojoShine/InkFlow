@@ -12,8 +12,19 @@ import 'ai_controller_test.dart' show MemoryKeys, FakeAiClient;
 class DelayedKeys extends MemoryKeys {
   final old = Completer<String?>();
   @override
-  Future<String?> read(String id) => id == oldId ? old.future : super.read(id);
+  Future<bool> contains(String id) => id == oldId
+      ? old.future.then((key) => key?.isNotEmpty ?? false)
+      : super.contains(id);
   String? oldId;
+}
+
+class ReadGuardKeys extends MemoryKeys {
+  int reads = 0;
+  @override
+  Future<String?> read(String id) async {
+    reads++;
+    throw StateError('Opening settings must not request the secret');
+  }
 }
 
 void main() {
@@ -34,6 +45,30 @@ void main() {
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('opening connection settings never reads the saved secret', (
+    tester,
+  ) async {
+    final root = (await tester.runAsync(
+      () => Directory.systemTemp.createTemp('ai-status-only'),
+    ))!;
+    final keys = ReadGuardKeys();
+    final ai = AiController(root, credentials: keys, client: FakeAiClient());
+    const config = AiSettings(
+      provider: AiProvider.deepseek,
+      baseUrl: 'https://api.deepseek.com',
+      model: 'test',
+    );
+    ai.activeProvider = config.provider;
+    ai.configurations[config.provider] = config;
+    keys.keys[config.credentialId] = 'saved-test-key';
+    await show(tester, ai);
+    expect(keys.reads, 0);
+    expect(find.text('已保存到本机'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    ai.dispose();
+    await tester.runAsync(() => root.delete(recursive: true));
+  });
 
   testWidgets(
     'standard connection hides advanced URL and reflects actual saved key',

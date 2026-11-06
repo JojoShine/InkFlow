@@ -361,7 +361,7 @@ class AiController extends ChangeNotifier {
     } on FormatException catch (error) {
       if (generation == _generation) failure = error.message.toString();
     } catch (_) {
-      if (generation == _generation) failure = '无法读取系统凭据或保存对话，请检查配置后重试';
+      if (generation == _generation) failure = '无法读取已保存的密钥或保存对话，请重试';
     } finally {
       if (generation == _generation) _sending = false;
       _notify();

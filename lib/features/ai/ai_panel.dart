@@ -647,6 +647,16 @@ class _AiPanelState extends State<AiPanel> {
                             ? '停止生成'
                             : '发送（Enter）',
                         style: IconButton.styleFrom(
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary,
+                          backgroundColor: colors.accent,
+                          disabledForegroundColor: colors.muted.withValues(
+                            alpha: .5,
+                          ),
+                          disabledBackgroundColor: colors.line.withValues(
+                            alpha: .5,
+                          ),
                           minimumSize: const Size(32, 32),
                           fixedSize: const Size(32, 32),
                           padding: EdgeInsets.zero,

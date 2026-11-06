@@ -9,6 +9,8 @@ import 'package:inkflow/features/ai/ai_settings.dart';
 class MemoryKeys implements AiCredentials {
   final keys = <String, String>{};
   @override
+  Future<bool> contains(String id) async => keys[id]?.isNotEmpty ?? false;
+  @override
   Future<String?> read(String id) async => keys[id];
   @override
   Future<void> write(String id, String key) async {
