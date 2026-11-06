@@ -20,7 +20,7 @@ class CoverServices extends DesktopServices {
 
 void main() {
   testWidgets(
-    'list/cards share covers; compact menu imports, cancels and removes without switching manuscripts',
+    'cards display covers; compact menu imports, cancels and removes without switching manuscripts',
     (tester) async {
       late Directory root;
       final services = CoverServices();
@@ -67,17 +67,14 @@ void main() {
       );
       expect(find.byTooltip('夏 的故事简介'), findsNothing);
 
-      await tester.tap(find.byTooltip('卡片视图'));
-      await tester.pumpAndSettle();
-      expect(c.preferences.libraryView, LibraryView.cards);
-      expect(find.byType(GridView), findsOneWidget);
+      expect(find.byKey(const ValueKey('library-card-grid')), findsOneWidget);
       expect(find.text('春 的故事简介'), findsOneWidget);
       expect(find.byTooltip('春 的故事简介'), findsNothing);
       expect(find.byTooltip(c.preferences.recentWorks.last.path), findsNothing);
       final card = find.byKey(
         ValueKey('work-card-${c.preferences.recentWorks.last.workId}'),
       );
-      expect(tester.getSize(card).height, lessThanOrEqualTo(400));
+      expect(tester.getSize(card).height, lessThanOrEqualTo(305));
       final defaultCover = find.descendant(
         of: card,
         matching: find.byType(BookCover),
@@ -158,12 +155,8 @@ void main() {
       expect(c.work!.manifest.title, '夏');
       expect(c.session.controller.text, '正在写的正文');
       expect(c.session.controller.selection, selection);
-      await tester.ensureVisible(find.byTooltip('列表视图'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('列表视图'));
-      await tester.pumpAndSettle();
       await waitFor(tester, () => find.byType(Image).evaluate().isNotEmpty);
-      expect(find.byType(GridView), findsNothing);
+      expect(find.byKey(const ValueKey('library-card-grid')), findsOneWidget);
       expect(find.text('修订后的故事简介'), findsOneWidget);
       await edit('春 · 修订');
       expect(find.text('更换封面'), findsOneWidget);
@@ -190,13 +183,13 @@ void main() {
       );
       tester.view.physicalSize = const Size(960, 800);
       await tester.runAsync(() async {
-        c.updateLibraryView(LibraryView.cards);
+        c.notifyListeners();
         await c.persistPreferences();
       });
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await tester.runAsync(() async {
-        c.updateLibraryView(LibraryView.list);
+        c.notifyListeners();
         await c.persistPreferences();
       });
       await tester.pumpAndSettle();

@@ -25,8 +25,6 @@ abstract final class InkIcons {
   static const transfer = CupertinoIcons.arrow_up_arrow_down;
   static const info = CupertinoIcons.info_circle;
   static const idea = CupertinoIcons.lightbulb;
-  static const list = CupertinoIcons.list_bullet;
-  static const grid = CupertinoIcons.square_grid_2x2;
   static const book = CupertinoIcons.book;
   static const more = CupertinoIcons.ellipsis;
   static const appearance = CupertinoIcons.paintbrush;

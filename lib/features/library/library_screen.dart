@@ -13,7 +13,8 @@ import '../../app/ink_icons.dart';
 import '../preferences/device_preferences.dart';
 
 const _bookCoverAspectRatio = 2 / 3;
-const _bookInfoHeight = 48.0;
+const _bookInfoHeight = 36.0;
+const _bookSynopsisHeight = 28.0;
 const _currentBookHeight = 160.0;
 
 class LibraryScreen extends StatefulWidget {
@@ -210,68 +211,36 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                     ],
                                   ),
                                 )
-                              : controller.preferences.libraryView ==
-                                    LibraryView.list
-                              ? Column(
-                                  children: [
-                                    for (final entry in pageEntries) ...[
-                                      _WorkListItem(
-                                        controller: controller,
-                                        entry: entry,
-                                      ),
-                                      Divider(
-                                        height: 1,
-                                        color: colors.line.withValues(
-                                          alpha: .55,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                )
                               : LayoutBuilder(
                                   builder: (context, constraints) {
                                     final columns =
-                                        ((constraints.maxWidth + 20) / 200)
+                                        ((constraints.maxWidth + 16) / 160)
                                             .floor()
-                                            .clamp(1, 4);
+                                            .clamp(1, 6);
                                     final cardWidth =
                                         ((constraints.maxWidth -
-                                                    20 * (columns - 1)) /
+                                                    16 * (columns - 1)) /
                                                 columns)
-                                            .clamp(0.0, 200.0);
-                                    final spacing = columns == 1
-                                        ? 0.0
-                                        : (constraints.maxWidth -
-                                                  cardWidth * columns) /
-                                              (columns - 1);
+                                            .clamp(0.0, 160.0);
                                     final cardHeight =
                                         cardWidth / _bookCoverAspectRatio +
                                         _bookInfoHeight +
-                                        44;
-                                    return GridView.builder(
-                                      shrinkWrap: true,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      padding: EdgeInsets.zero,
-                                      itemCount: pageEntries.length,
-                                      gridDelegate:
-                                          SliverGridDelegateWithFixedCrossAxisCount(
-                                            crossAxisCount: columns,
-                                            crossAxisSpacing: spacing,
-                                            mainAxisSpacing: 20,
-                                            mainAxisExtent: cardHeight,
+                                        _bookSynopsisHeight;
+                                    return Wrap(
+                                      key: const ValueKey('library-card-grid'),
+                                      spacing: 16,
+                                      runSpacing: 16,
+                                      children: [
+                                        for (final entry in pageEntries)
+                                          SizedBox(
+                                            width: cardWidth,
+                                            height: cardHeight,
+                                            child: _WorkCard(
+                                              controller: controller,
+                                              entry: entry,
+                                            ),
                                           ),
-                                      itemBuilder: (_, index) => Align(
-                                        alignment: Alignment.topLeft,
-                                        child: SizedBox(
-                                          width: cardWidth,
-                                          height: cardHeight,
-                                          child: _WorkCard(
-                                            controller: controller,
-                                            entry: pageEntries[index],
-                                          ),
-                                        ),
-                                      ),
+                                      ],
                                     );
                                   },
                                 ),
@@ -510,58 +479,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
         ),
       );
-      final views = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final view in LibraryView.values)
-            IconButton(
-              tooltip: view == LibraryView.list ? '列表视图' : '卡片视图',
-              isSelected: controller.preferences.libraryView == view,
-              style: IconButton.styleFrom(
-                minimumSize: const Size(32, 32),
-                fixedSize: const Size(32, 32),
-                padding: EdgeInsets.zero,
-                backgroundColor: controller.preferences.libraryView == view
-                    ? colors.selection
-                    : Colors.transparent,
-                foregroundColor: controller.preferences.libraryView == view
-                    ? colors.accent
-                    : colors.muted,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(5),
-                ),
-              ),
-              onPressed: () {
-                if (_scroll.hasClients) _scroll.jumpTo(0);
-                controller.updateLibraryView(view);
-              },
-              icon: Icon(
-                view == LibraryView.list ? InkIcons.list : InkIcons.grid,
-                size: 16,
-              ),
-            ),
-        ],
-      );
       return constraints.maxWidth >= 620
           ? Row(
               children: [
                 Expanded(child: label),
-                SizedBox(width: 320, child: search),
-                const SizedBox(width: 12),
-                views,
+                const SizedBox(width: 20),
+                SizedBox(width: 360, child: search),
               ],
             )
           : Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: label),
-                    views,
-                  ],
-                ),
-                const SizedBox(height: 12),
-                search,
-              ],
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [label, const SizedBox(height: 12), search],
             );
     },
   );
@@ -696,7 +624,7 @@ class _WorkSynopsis extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
     text,
-    maxLines: 2,
+    maxLines: 1,
     overflow: TextOverflow.ellipsis,
     style: TextStyle(
       color: InkPalette.of(context).muted,
@@ -704,59 +632,6 @@ class _WorkSynopsis extends StatelessWidget {
       height: 1.6,
     ),
   );
-}
-
-class _WorkListItem extends StatelessWidget {
-  const _WorkListItem({required this.controller, required this.entry});
-  final WorkbenchController controller;
-  final RecentWork entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = InkPalette.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _openRecent(context, controller, entry),
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-          child: Row(
-            children: [
-              BookCover(entry: entry, services: controller.services, width: 64),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 19),
-                    ),
-                    if (entry.details.synopsis.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      _WorkSynopsis(text: entry.details.synopsis),
-                    ],
-                    const SizedBox(height: 8),
-                    Text(
-                      entry.path,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colors.muted, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              _WorkItemMenu(controller: controller, entry: entry),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _WorkCard extends StatelessWidget {
@@ -798,7 +673,7 @@ class _WorkCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           entry.title,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 14, height: 1.4),
                         ),

@@ -65,67 +65,78 @@ void main() {
       .map((cover) => cover.entry.title)
       .toList();
 
-  testWidgets(
-    'pages contain eight books and view changes retain page and bounds',
-    (tester) async {
-      await showLibrary(tester);
-      expect(displayedTitles(tester), List.generate(8, (i) => '作品0${i + 1}'));
-      expect(find.text('共 19 本 · 每页 8 本'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('library-next-page')));
+  testWidgets('eight compact cards per page use one fixed pagination footer', (
+    tester,
+  ) async {
+    await showLibrary(tester);
+    expect(find.byTooltip('列表视图'), findsNothing);
+    expect(find.byTooltip('卡片视图'), findsNothing);
+    expect(displayedTitles(tester), List.generate(8, (i) => '作品0${i + 1}'));
+    expect(find.text('共 19 本 · 每页 8 本'), findsOneWidget);
+    final pagerBounds = tester.getRect(
+      find.byKey(const ValueKey('library-pagination')),
+    );
+    await tester.tap(find.byKey(const ValueKey('library-next-page')));
+    await tester.pumpAndSettle();
+    expect(displayedTitles(tester).first, '作品09');
+    expect(displayedTitles(tester).last, '作品16');
+    final card = find.byKey(
+      ValueKey('work-card-${controller.preferences.recentWorks[8].workId}'),
+    );
+    final cover = find.descendant(of: card, matching: find.byType(BookCover));
+    final coverSize = tester.getSize(cover);
+    expect(coverSize.width / coverSize.height, closeTo(2 / 3, .01));
+    expect(coverSize.width, lessThanOrEqualTo(160));
+    expect(tester.getSize(card).height, lessThanOrEqualTo(305));
+    expect(tester.getRect(cover).left, closeTo(tester.getRect(card).left, .1));
+    expect(
+      tester.getRect(cover).right,
+      closeTo(tester.getRect(card).right, .1),
+    );
+    await tester.tap(find.byKey(const ValueKey('library-next-page')));
+    await tester.pumpAndSettle();
+    expect(displayedTitles(tester), ['作品17', '作品18', '作品19']);
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.byKey(const ValueKey('library-next-page')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester.getRect(find.byKey(const ValueKey('library-pagination'))),
+      pagerBounds,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('desktop cards fit five or six books with compact spacing', (
+    tester,
+  ) async {
+    await showLibrary(tester);
+    for (final width in [960.0, 1100.0, 1360.0]) {
+      tester.view.physicalSize = Size(width, 1000);
       await tester.pumpAndSettle();
-      expect(displayedTitles(tester).first, '作品09');
-      expect(displayedTitles(tester).last, '作品16');
-      final listBounds = tester.getRect(
-        find.byKey(const ValueKey('library-results')),
-      );
-      final pagerBounds = tester.getRect(
-        find.byKey(const ValueKey('library-pagination')),
-      );
-      await tester.tap(find.byTooltip('卡片视图'));
-      await tester.pumpAndSettle();
-      expect(displayedTitles(tester).first, '作品09');
-      expect(displayedTitles(tester).last, '作品16');
-      expect(
-        tester.getRect(find.byKey(const ValueKey('library-results'))),
-        listBounds,
-      );
-      expect(
-        tester.getRect(find.byKey(const ValueKey('library-pagination'))),
-        pagerBounds,
-      );
-      final card = find.byKey(
-        ValueKey('work-card-${controller.preferences.recentWorks[8].workId}'),
-      );
-      final cover = find.descendant(of: card, matching: find.byType(BookCover));
-      expect(
-        tester.getRect(cover).left,
-        closeTo(tester.getRect(card).left, .1),
-      );
-      expect(
-        tester.getRect(cover).right,
-        closeTo(tester.getRect(card).right, .1),
-      );
-      final coverSize = tester.getSize(cover);
-      expect(coverSize.width / coverSize.height, closeTo(2 / 3, .01));
-      expect(coverSize.width, lessThanOrEqualTo(200));
-      expect(
-        tester.getRect(find.byType(BookCover).at(3)).right,
-        closeTo(listBounds.right, .1),
-      );
-      await tester.tap(find.byKey(const ValueKey('library-next-page')));
-      await tester.pumpAndSettle();
-      expect(displayedTitles(tester), ['作品17', '作品18', '作品19']);
-      expect(
-        tester
-            .widget<OutlinedButton>(
-              find.byKey(const ValueKey('library-next-page')),
-            )
-            .onPressed,
-        isNull,
-      );
+      final rects = find
+          .byType(BookCover)
+          .evaluate()
+          .map((element) => tester.getRect(find.byWidget(element.widget)))
+          .toList();
+      final firstRow = rects
+          .where((rect) => (rect.top - rects.first.top).abs() < 1)
+          .toList();
+      expect(firstRow.length, inInclusiveRange(5, 6), reason: 'width=$width');
+      for (var i = 1; i < firstRow.length; i++) {
+        expect(firstRow[i].left - firstRow[i - 1].right, closeTo(16, .1));
+      }
+      for (final rect in rects) {
+        expect(rect.width, lessThanOrEqualTo(160));
+        expect(rect.width / rect.height, closeTo(2 / 3, .01));
+      }
       expect(tester.takeException(), isNull);
-    },
-  );
+    }
+  });
 
   testWidgets(
     'search uses all cached metadata and resets paging without opening a book',
@@ -172,8 +183,6 @@ void main() {
     expect(find.byKey(const ValueKey('current-work-card')), findsNothing);
     tester.view.physicalSize = const Size(480, 800);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('卡片视图'));
-    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
@@ -181,8 +190,6 @@ void main() {
     tester,
   ) async {
     await showLibrary(tester);
-    await tester.tap(find.byTooltip('卡片视图'));
-    await tester.pumpAndSettle();
     for (final preset in inkThemePresets) {
       controller.updateAppearance(controller.appearance.select(preset.id));
       await tester.pumpAndSettle();

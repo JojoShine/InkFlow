@@ -873,12 +873,6 @@ class WorkbenchController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateLibraryView(LibraryView view) {
-    preferences = preferences.copyWith(libraryView: view);
-    _schedulePreferences();
-    notifyListeners();
-  }
-
   Future<void> updateWorkDetails(
     RecentWork entry,
     WorkHandle snapshot, {
