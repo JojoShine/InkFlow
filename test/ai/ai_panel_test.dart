@@ -109,10 +109,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       tester
-          .widget<CheckedPopupMenuItem<AiContextSource>>(
-            find.byKey(const ValueKey('ai-source-chapter')),
+          .widget<Semantics>(
+            find.byKey(const ValueKey('ai-source-state-chapter')),
           )
-          .checked,
+          .properties
+          .selected,
       isTrue,
     );
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);

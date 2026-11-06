@@ -95,6 +95,7 @@ class _AiPanelState extends State<AiPanel> {
   @override
   Widget build(BuildContext context) {
     final colors = InkPalette.of(context), attachment = ai.attachment;
+    final contextSource = attachment?.source ?? AiContextSource.conversation;
     final replyStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
       fontSize: 14,
       height: 1.9,
@@ -513,23 +514,69 @@ class _AiPanelState extends State<AiPanel> {
                       PopupMenuButton<AiContextSource>(
                         key: const ValueKey('ai-context-menu'),
                         tooltip: '选择要附加的正文',
+                        constraints: const BoxConstraints.tightFor(width: 144),
+                        menuPadding: const EdgeInsets.symmetric(vertical: 4),
+                        elevation: 2,
+                        shadowColor: colors.ink.withValues(alpha: .12),
                         onSelected: _attach,
                         itemBuilder: (context) => [
                           for (final source in AiContextSource.values)
-                            CheckedPopupMenuItem(
+                            PopupMenuItem(
                               key: ValueKey('ai-source-${source.name}'),
                               value: source,
-                              checked:
-                                  (attachment?.source ??
-                                      AiContextSource.conversation) ==
-                                  source,
+                              height: 34,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
                               enabled:
                                   source == AiContextSource.conversation ||
                                   (!widget.workbench.chapterLoading &&
                                       widget.workbench.activeChapterId != null),
-                              child: Text(
-                                const ['不附正文', '选中片段', '当前章节'][source.index],
-                                style: const TextStyle(fontSize: 12),
+                              labelTextStyle: WidgetStateProperty.resolveWith(
+                                (states) => Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium!
+                                    .copyWith(
+                                      fontSize: 12,
+                                      height: 1.4,
+                                      fontWeight: source == contextSource
+                                          ? FontWeight.w600
+                                          : FontWeight.normal,
+                                      color:
+                                          states.contains(WidgetState.disabled)
+                                          ? colors.muted.withValues(alpha: .5)
+                                          : source == contextSource
+                                          ? colors.accent
+                                          : colors.ink,
+                                    ),
+                              ),
+                              child: Semantics(
+                                key: ValueKey('ai-source-state-${source.name}'),
+                                selected: source == contextSource,
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        const [
+                                          '不附正文',
+                                          '选中片段',
+                                          '当前章节',
+                                        ][source.index],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    SizedBox(
+                                      width: 14,
+                                      child: source == contextSource
+                                          ? Icon(
+                                              InkIcons.check,
+                                              size: 14,
+                                              color: colors.accent,
+                                            )
+                                          : null,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                         ],
