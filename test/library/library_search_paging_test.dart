@@ -105,6 +105,13 @@ void main() {
         tester.getRect(cover).right,
         closeTo(tester.getRect(card).right, .1),
       );
+      final coverSize = tester.getSize(cover);
+      expect(coverSize.width / coverSize.height, closeTo(2 / 3, .01));
+      expect(coverSize.width, lessThanOrEqualTo(200));
+      expect(
+        tester.getRect(find.byType(BookCover).at(3)).right,
+        closeTo(listBounds.right, .1),
+      );
       await tester.tap(find.byKey(const ValueKey('library-next-page')));
       await tester.pumpAndSettle();
       expect(displayedTitles(tester), ['作品17', '作品18', '作品19']);

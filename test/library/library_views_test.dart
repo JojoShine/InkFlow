@@ -77,7 +77,7 @@ void main() {
       final card = find.byKey(
         ValueKey('work-card-${c.preferences.recentWorks.last.workId}'),
       );
-      expect(tester.getSize(card).height, lessThanOrEqualTo(280));
+      expect(tester.getSize(card).height, lessThanOrEqualTo(400));
       final defaultCover = find.descendant(
         of: card,
         matching: find.byType(BookCover),
@@ -87,7 +87,7 @@ void main() {
       expect(coverBounds.left, closeTo(cardBounds.left, .1));
       expect(coverBounds.right, closeTo(cardBounds.right, .1));
       expect(coverBounds.top, closeTo(cardBounds.top, .1));
-      expect(coverBounds.height, closeTo(180, .1));
+      expect(coverBounds.width / coverBounds.height, closeTo(2 / 3, .01));
       final otherRoot = c.preferences.recentWorks.last.path;
       final selection = c.session.controller.selection;
 

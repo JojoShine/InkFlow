@@ -12,7 +12,7 @@ import '../works/work_repository.dart';
 import '../../app/ink_icons.dart';
 import '../preferences/device_preferences.dart';
 
-const _bookCoverHeight = 180.0;
+const _bookCoverAspectRatio = 2 / 3;
 const _bookInfoHeight = 48.0;
 const _currentBookHeight = 160.0;
 
@@ -231,9 +231,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               : LayoutBuilder(
                                   builder: (context, constraints) {
                                     final columns =
-                                        ((constraints.maxWidth + 20) / 220)
+                                        ((constraints.maxWidth + 20) / 200)
                                             .floor()
                                             .clamp(1, 4);
+                                    final cardWidth =
+                                        ((constraints.maxWidth -
+                                                    20 * (columns - 1)) /
+                                                columns)
+                                            .clamp(0.0, 200.0);
+                                    final spacing = columns == 1
+                                        ? 0.0
+                                        : (constraints.maxWidth -
+                                                  cardWidth * columns) /
+                                              (columns - 1);
+                                    final cardHeight =
+                                        cardWidth / _bookCoverAspectRatio +
+                                        _bookInfoHeight +
+                                        44;
                                     return GridView.builder(
                                       shrinkWrap: true,
                                       physics:
@@ -243,16 +257,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                       gridDelegate:
                                           SliverGridDelegateWithFixedCrossAxisCount(
                                             crossAxisCount: columns,
-                                            crossAxisSpacing: 20,
+                                            crossAxisSpacing: spacing,
                                             mainAxisSpacing: 20,
-                                            mainAxisExtent:
-                                                _bookCoverHeight +
-                                                _bookInfoHeight +
-                                                44,
+                                            mainAxisExtent: cardHeight,
                                           ),
-                                      itemBuilder: (_, index) => _WorkCard(
-                                        controller: controller,
-                                        entry: pageEntries[index],
+                                      itemBuilder: (_, index) => Align(
+                                        alignment: Alignment.topLeft,
+                                        child: SizedBox(
+                                          width: cardWidth,
+                                          height: cardHeight,
+                                          child: _WorkCard(
+                                            controller: controller,
+                                            entry: pageEntries[index],
+                                          ),
+                                        ),
                                       ),
                                     );
                                   },
@@ -768,7 +786,7 @@ class _WorkCard extends StatelessWidget {
                 entry: entry,
                 services: controller.services,
                 width: constraints.maxWidth,
-                height: _bookCoverHeight,
+                height: constraints.maxWidth / _bookCoverAspectRatio,
                 borderRadius: BorderRadius.zero,
               ),
               SizedBox(
