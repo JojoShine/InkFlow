@@ -281,229 +281,262 @@ class _AiPanelState extends State<AiPanel> {
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(color: colors.line),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    for (final purpose in AiPurpose.values)
-                      Expanded(
-                        child: Semantics(
-                          key: ValueKey('ai-purpose-${purpose.name}'),
-                          selected: ai.purpose == purpose,
-                          button: true,
-                          child: InkWell(
-                            onTap: () {
-                              setState(() => ai.purpose = purpose);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 9),
-                              color: ai.purpose == purpose
-                                  ? colors.selection
-                                  : Colors.transparent,
-                              child: Text(
-                                purpose.label,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: ai.purpose == purpose
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
-                                  color: ai.purpose == purpose
-                                      ? colors.accent
-                                      : colors.muted,
-                                ),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+            child: Row(
+              children: [
+                for (final purpose in AiPurpose.values)
+                  Expanded(
+                    child: Semantics(
+                      key: ValueKey('ai-purpose-${purpose.name}'),
+                      selected: ai.purpose == purpose,
+                      button: true,
+                      child: InkWell(
+                        onTap: () => setState(() => ai.purpose = purpose),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                width: 2,
+                                color: ai.purpose == purpose
+                                    ? colors.accent
+                                    : Colors.transparent,
                               ),
+                            ),
+                          ),
+                          child: Text(
+                            purpose.label,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: ai.purpose == purpose
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: ai.purpose == purpose
+                                  ? colors.accent
+                                  : colors.muted,
                             ),
                           ),
                         ),
                       ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
-            child: Text(
-              '参考内容',
-              style: TextStyle(fontSize: 11, color: colors.muted),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                for (final source in AiContextSource.values)
-                  ChoiceChip(
-                    key: ValueKey('ai-source-${source.name}'),
-                    label: Text(const ['不附正文', '选中片段', '当前章节'][source.index]),
-                    selected:
-                        (attachment?.source ?? AiContextSource.conversation) ==
-                        source,
-                    showCheckmark: false,
-                    selectedColor: colors.selection,
-                    side: BorderSide(
-                      color:
-                          (attachment?.source ??
-                                  AiContextSource.conversation) ==
-                              source
-                          ? colors.accent
-                          : colors.line,
                     ),
-                    labelStyle: TextStyle(
-                      fontSize: 11,
-                      color:
-                          (attachment?.source ??
-                                  AiContextSource.conversation) ==
-                              source
-                          ? colors.accent
-                          : colors.muted,
-                    ),
-                    visualDensity: VisualDensity.compact,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 4,
-                    ),
-                    onSelected:
-                        source != AiContextSource.conversation &&
-                            (widget.workbench.chapterLoading ||
-                                widget.workbench.activeChapterId == null)
-                        ? null
-                        : (_) => _attach(source),
                   ),
               ],
             ),
           ),
-          if (attachment != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${attachment.chapterTitle} · ${attachment.characterCount} 字符',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '移除附加内容',
-                        icon: const Icon(InkIcons.close, size: 14),
-                        onPressed: () => setState(() => ai.attachment = null),
-                      ),
-                      TextButton(
-                        onPressed: () => showDialog<void>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('本次附加内容'),
-                            content: SizedBox(
-                              width: 600,
-                              child: SingleChildScrollView(
-                                child: SelectableText(attachment.text),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: colors.paper,
+              border: Border.all(color: colors.line),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (attachment != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 4, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${attachment.chapterTitle} · ${attachment.characterCount} 字符',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: colors.muted,
+                                ),
                               ),
                             ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('关闭'),
+                            IconButton(
+                              tooltip: '移除附加内容',
+                              icon: const Icon(InkIcons.close, size: 14),
+                              onPressed: () =>
+                                  setState(() => ai.attachment = null),
+                            ),
+                            TextButton(
+                              onPressed: () => showDialog<void>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('本次附加内容'),
+                                  content: SizedBox(
+                                    width: 600,
+                                    child: SingleChildScrollView(
+                                      child: SelectableText(attachment.text),
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('关闭'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              child: const Text('预览'),
+                            ),
+                          ],
+                        ),
+                        if (stale)
+                          const Text(
+                            '正文已变化，可重新附加',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                      ],
+                    ),
+                  ),
+                Focus(
+                  onKeyEvent: (node, event) {
+                    if (event is KeyDownEvent &&
+                        event.logicalKey == LogicalKeyboardKey.enter &&
+                        !HardwareKeyboard.instance.isShiftPressed) {
+                      if (!input.value.composing.isCollapsed &&
+                          input.value.composing.isValid) {
+                        return KeyEventResult.ignored;
+                      }
+                      _send();
+                      return KeyEventResult.handled;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: TextField(
+                    controller: input,
+                    focusNode: focus,
+                    minLines: 3,
+                    maxLines: 4,
+                    onChanged: (text) => setState(() => ai.draft = text),
+                    decoration: InputDecoration(
+                      hintText: switch (ai.purpose) {
+                        AiPurpose.organize => '写下想讨论的问题，或记录零散想法…',
+                        AiPurpose.evaluate => '粘贴内容，或附加正文后说明想评价的方面…',
+                        AiPurpose.summarize => '附加正文，或粘贴需要总结的内容…',
+                      },
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      filled: false,
+                      contentPadding: const EdgeInsets.fromLTRB(12, 14, 12, 8),
+                    ),
+                    style: const TextStyle(fontSize: 13, height: 1.6),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 0, 8, 8),
+                  child: Row(
+                    children: [
+                      PopupMenuButton<AiContextSource>(
+                        key: const ValueKey('ai-context-menu'),
+                        tooltip: '选择要附加的正文',
+                        onSelected: _attach,
+                        itemBuilder: (context) => [
+                          for (final source in AiContextSource.values)
+                            CheckedPopupMenuItem(
+                              key: ValueKey('ai-source-${source.name}'),
+                              value: source,
+                              checked:
+                                  (attachment?.source ??
+                                      AiContextSource.conversation) ==
+                                  source,
+                              enabled:
+                                  source == AiContextSource.conversation ||
+                                  (!widget.workbench.chapterLoading &&
+                                      widget.workbench.activeChapterId != null),
+                              child: Text(
+                                const ['不附正文', '选中片段', '当前章节'][source.index],
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                        ],
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                InkIcons.chapter,
+                                size: 14,
+                                color: colors.muted,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                attachment == null
+                                    ? '附加正文'
+                                    : const [
+                                        '不附正文',
+                                        '选中片段',
+                                        '当前章节',
+                                      ][attachment.source.index],
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: attachment == null
+                                      ? colors.muted
+                                      : colors.accent,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                InkIcons.chevronDown,
+                                size: 10,
+                                color: colors.muted,
                               ),
                             ],
                           ),
                         ),
-                        child: const Text('预览'),
+                      ),
+                      const Spacer(),
+                      IconButton.filled(
+                        tooltip: ai.loadingConversation
+                            ? '正在读取对话'
+                            : ai.busy
+                            ? '停止生成'
+                            : '发送（Enter）',
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(32, 32),
+                          fixedSize: const Size(32, 32),
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: ai.loadingConversation
+                            ? null
+                            : ai.busy
+                            ? ai.stop
+                            : input.text.trim().isNotEmpty || attachment != null
+                            ? _send
+                            : null,
+                        icon: Icon(
+                          ai.busy ? InkIcons.close : InkIcons.send,
+                          size: 16,
+                        ),
                       ),
                     ],
                   ),
-                  if (stale)
-                    const Text('正文已变化，可重新附加', style: TextStyle(fontSize: 11)),
-                ],
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 4, 14, 2),
-            child: Focus(
-              onKeyEvent: (node, event) {
-                if (event is KeyDownEvent &&
-                    event.logicalKey == LogicalKeyboardKey.enter &&
-                    !HardwareKeyboard.instance.isShiftPressed) {
-                  if (!input.value.composing.isCollapsed &&
-                      input.value.composing.isValid) {
-                    return KeyEventResult.ignored;
-                  }
-                  _send();
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: TextField(
-                controller: input,
-                focusNode: focus,
-                minLines: 2,
-                maxLines: 4,
-                onChanged: (text) => setState(() => ai.draft = text),
-                decoration: InputDecoration(
-                  hintText: switch (ai.purpose) {
-                    AiPurpose.organize => '写下想讨论的问题，或记录零散想法…',
-                    AiPurpose.evaluate => '粘贴内容，或附加正文后说明想评价的方面…',
-                    AiPurpose.summarize => '附加正文，或粘贴需要总结的内容…',
-                  },
-                  border: OutlineInputBorder(),
                 ),
-                style: const TextStyle(fontSize: 13, height: 1.6),
-              ),
+              ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
-            child: Text(
-              '包含当前对话中已发送的历史内容',
-              style: TextStyle(fontSize: 10, color: colors.muted),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
-                    'Enter 发送\nShift+Enter 换行',
+                    'Enter 发送 · Shift+Enter 换行',
                     style: TextStyle(fontSize: 10, color: colors.muted),
                   ),
                 ),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(76, 36),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  icon: Icon(
-                    ai.busy ? InkIcons.close : InkIcons.send,
-                    size: 14,
-                  ),
-                  onPressed: ai.loadingConversation
-                      ? null
-                      : ai.busy
-                      ? ai.stop
-                      : input.text.trim().isNotEmpty || attachment != null
-                      ? _send
-                      : null,
-                  label: Text(
-                    ai.loadingConversation
-                        ? '读取中'
-                        : ai.busy
-                        ? '停止'
-                        : '发送',
-                  ),
+                Tooltip(
+                  message: '包含当前对话中已发送的历史内容；正文仅在主动附加后发送。',
+                  child: Icon(InkIcons.info, size: 12, color: colors.muted),
                 ),
               ],
             ),

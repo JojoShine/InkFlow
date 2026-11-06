@@ -63,6 +63,16 @@ void main() {
     c.updatePanelWidths(notes: 260);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byWidgetPredicate(
+              (widget) => widget is IconButton && widget.tooltip == '发送（Enter）',
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
     final output = Platform.environment['INKFLOW_UI_CAPTURE'];
     if (output != null) {
       await tester.runAsync(() async {
@@ -89,15 +99,24 @@ void main() {
           .selected,
       isTrue,
     );
-    await tester.tap(find.text('当前章节'));
+    await tester.tap(find.byKey(const ValueKey('ai-context-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('ai-source-chapter')));
     await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pumpAndSettle();
+    expect(find.text('当前章节'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('ai-context-menu')));
     await tester.pumpAndSettle();
     expect(
       tester
-          .widget<ChoiceChip>(find.byKey(const ValueKey('ai-source-chapter')))
-          .selected,
+          .widget<CheckedPopupMenuItem<AiContextSource>>(
+            find.byKey(const ValueKey('ai-source-chapter')),
+          )
+          .checked,
       isTrue,
     );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('移除附加内容'));
     await tester.pump();
     expect(c.ai.attachment, isNull);
