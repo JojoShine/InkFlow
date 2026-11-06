@@ -11,6 +11,7 @@ abstract final class InkIcons {
   static const checkCircle = CupertinoIcons.check_mark_circled;
   static const chevronRight = CupertinoIcons.chevron_right;
   static const close = CupertinoIcons.xmark;
+  static const copy = CupertinoIcons.doc_on_doc;
   static const exitFocus = CupertinoIcons.arrow_down_right_arrow_up_left;
   static const window = CupertinoIcons.square;
   static const trash = CupertinoIcons.trash;

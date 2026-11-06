@@ -307,13 +307,33 @@ class _AiPanelState extends State<AiPanel> {
                                   ),
                             ),
                             if (turn.answer.isNotEmpty)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: () => Clipboard.setData(
-                                    ClipboardData(text: turn.answer),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Tooltip(
+                                    message: '复制这条 AI 回复',
+                                    child: TextButton.icon(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: colors.muted,
+                                        minimumSize: const Size(0, 28),
+                                        padding: EdgeInsets.zero,
+                                        textStyle: Theme.of(context)
+                                            .textTheme
+                                            .labelLarge!
+                                            .copyWith(
+                                              fontSize: 12,
+                                              height: 1.4,
+                                              fontWeight: FontWeight.normal,
+                                            ),
+                                      ),
+                                      onPressed: () => Clipboard.setData(
+                                        ClipboardData(text: turn.answer),
+                                      ),
+                                      icon: const Icon(InkIcons.copy, size: 13),
+                                      label: const Text('复制回复'),
+                                    ),
                                   ),
-                                  child: const Text('复制'),
                                 ),
                               ),
                           ],

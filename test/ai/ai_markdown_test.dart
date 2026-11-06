@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkflow/features/ai/ai_controller.dart';
 import 'package:inkflow/features/ai/ai_panel.dart';
@@ -89,5 +90,37 @@ void main() {
     expect(find.text('下一步', findRichText: true), findsOneWidget);
     expect(find.textContaining('**'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('copy reply copies only its own original Markdown', (
+    tester,
+  ) async {
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    final c = await showReply(tester, '第一条回复');
+    const markdown = '### 第二条回复\n\n**这一条的内容**';
+    c.ai.turns.add(AiTurn(question: '另一个问题')..answer = markdown);
+    await tester.tap(find.text('总结内容'));
+    await tester.pumpAndSettle();
+    final copy = find.text('复制回复').last;
+    await tester.ensureVisible(copy);
+    await tester.pumpAndSettle();
+    await tester.tap(copy);
+    await tester.pump();
+    expect(copied, markdown);
   });
 }
