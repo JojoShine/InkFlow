@@ -21,6 +21,7 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		A10600000000000000000001 /* AiCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10600000000000000000002 /* AiCredentials.swift */; };
 		A10000000000000000000003 /* DirectoryAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000004 /* DirectoryAccess.swift */; };
 		092A9C430503C871C5EEAD98 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 141045060FDD383589370A2B /* Pods_Runner.framework */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
@@ -64,6 +65,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A10600000000000000000002 /* AiCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiCredentials.swift; sourceTree = "<group>"; };
 		A10000000000000000000004 /* DirectoryAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryAccess.swift; sourceTree = "<group>"; };
 		071EA5417BA84508687D9619 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0D4DF64B3F226CF591EEC464 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
@@ -180,6 +182,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000004 /* DirectoryAccess.swift */,
+				A10600000000000000000002 /* AiCredentials.swift */,
 				A10000000000000000000002 /* NativeNovelEditor.swift */,
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
@@ -444,6 +447,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000003 /* DirectoryAccess.swift in Sources */,
+				A10600000000000000000001 /* AiCredentials.swift in Sources */,
 				A10000000000000000000001 /* NativeNovelEditor.swift in Sources */,
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,

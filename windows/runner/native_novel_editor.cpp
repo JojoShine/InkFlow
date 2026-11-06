@@ -83,6 +83,42 @@ NativeNovelEditor::NativeNovelEditor(HWND parent, flutter::BinaryMessenger* mess
         static_cast<int>(Number(args, "y", 0)), static_cast<int>(Number(args, "width", 1)),
         static_cast<int>(Number(args, "height", 1)), SWP_NOACTIVATE);
       ApplyTextInsets(); ScheduleScroll();
+    } else if (method == "snapshot") {
+      if (String(args, "documentId") != document_id_ || static_cast<int>(Number(args, "documentGeneration", -1)) != document_generation_) {
+        result->Error("stale_snapshot", "章节已变化"); return;
+      }
+      RECT rect; GetClientRect(editor_, &rect);
+      const int width = rect.right, height = rect.bottom;
+      if (width <= 0 || height <= 0 || static_cast<int64_t>(width) * height > 16777216) {
+        result->Error("snapshot_bounds", "正文预览尺寸不可用"); return;
+      }
+      HDC dc = GetDC(editor_);
+      HDC memory = CreateCompatibleDC(dc);
+      BITMAPINFO info = {}; info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+      info.bmiHeader.biWidth = width; info.bmiHeader.biHeight = -height;
+      info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32; info.bmiHeader.biCompression = BI_RGB;
+      void* bits = nullptr;
+      HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+      if (!memory || !bitmap || !bits) {
+        if (bitmap) DeleteObject(bitmap);
+        if (memory) DeleteDC(memory);
+        ReleaseDC(editor_, dc);
+        result->Error("snapshot_failed", "正文预览暂不可用"); return;
+      }
+      HGDIOBJ previous = SelectObject(memory, bitmap);
+      const bool focused = GetFocus() == editor_;
+      if (focused) HideCaret(editor_);
+      SendMessage(editor_, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(memory), PRF_CLIENT | PRF_ERASEBKGND);
+      if (focused) ShowCaret(editor_);
+      const size_t size = static_cast<size_t>(width) * height * 4;
+      auto* source = static_cast<uint8_t*>(bits);
+      std::vector<uint8_t> pixels(source, source + size);
+      for (size_t i = 3; i < pixels.size(); i += 4) pixels[i] = 255;
+      SelectObject(memory, previous); DeleteObject(bitmap); DeleteDC(memory); ReleaseDC(editor_, dc);
+      result->Success(Value(Map{{Value("documentId"), Value(document_id_)},
+        {Value("documentGeneration"), Value(document_generation_)}, {Value("width"), Value(width)},
+        {Value("height"), Value(height)}, {Value("rowBytes"), Value(width * 4)},
+        {Value("scale"), Value(scale_)}, {Value("pixels"), Value(pixels)}})); return;
     } else if (method == "visible") {
       auto visible = call.arguments() ? std::get_if<bool>(call.arguments()) : nullptr;
       if (!visible || !*visible) restore_focus_ = GetFocus() == editor_;

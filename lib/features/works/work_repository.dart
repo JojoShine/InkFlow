@@ -120,8 +120,9 @@ class WorkHandle {
         ).firstMatch(path);
         if (match == null) continue;
         final id = match[2]!;
-        if (match[1] == 'chapters' && chapters.containsKey(id))
+        if (match[1] == 'chapters' && chapters.containsKey(id)) {
           chapterIds.add(id);
+        }
         if (match[1] == 'notes') {
           if (notes.containsKey(id)) noteIds.add(id);
           _noteFiles = null;
@@ -175,8 +176,9 @@ class WorkHandle {
     await Future.wait(
       ids.map(
         (id) => _reads.run(id, () async {
-          if (!manifest.chapterIds.contains(id))
+          if (!manifest.chapterIds.contains(id)) {
             throw const FormatException('章节不存在');
+          }
           final path = '${_chapter(id)}.json';
           final raw = await store.read(path);
           if (raw == null) throw const FormatException('章节信息暂不可用，请等待同步后重试');
@@ -209,8 +211,9 @@ class WorkHandle {
       if (await directory.exists()) {
         await for (final file in directory.list()) {
           final name = file.uri.pathSegments.last;
-          if (file is File && RegExp(r'^[a-f0-9]{32}\.json$').hasMatch(name))
+          if (file is File && RegExp(r'^[a-f0-9]{32}\.json$').hasMatch(name)) {
             ids.add(name.substring(0, 32));
+          }
         }
       }
       _noteFiles = ids..sort();
@@ -324,8 +327,9 @@ class WorkHandle {
   }
 
   Future<ChapterDocument> readChapter(String id) async {
-    if (!chapters.containsKey(id) && manifest.chapterIds.contains(id))
+    if (!chapters.containsKey(id) && manifest.chapterIds.contains(id)) {
       await loadChapterMetadata([id]);
+    }
     final chapter = chapters[id];
     if (chapter == null) throw const FormatException('章节不存在');
     final raw = await store.read('${_chapter(id)}.txt');
@@ -531,6 +535,10 @@ class WorkHandle {
     if (!result.isSaved) throw SaveException(result);
     _versions[path] = result.version!;
     notes[note.id] = note;
+    if (_noteFiles != null && !_noteFiles!.contains(note.id)) {
+      _noteFiles!.add(note.id);
+      _noteFiles!.sort();
+    }
   }
 
   Set<String> _subtree(String id) {
@@ -623,6 +631,7 @@ class WorkHandle {
       await _mutate({for (final child in ids) _note(child): null});
       for (final child in ids) {
         notes.remove(child);
+        _noteFiles?.remove(child);
       }
     }
   }

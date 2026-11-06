@@ -6,6 +6,7 @@ import '../recovery/recovery_panel.dart';
 import '../workbench/workbench_controller.dart';
 import 'note_models.dart';
 import '../../app/ink_icons.dart';
+import '../workbench/workbench_panel.dart';
 
 const _noteLabels = {
   NoteKind.outline: '大纲',
@@ -53,45 +54,7 @@ class _NotesPanelState extends State<NotesPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 6, 0),
-            child: Row(
-              children: [
-                for (final kind in NoteKind.values)
-                  Expanded(
-                    child: InkWell(
-                      onTap: () {
-                        setState(() => selectedId = null);
-                        c.setPanel(kind);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: widget.kind == kind
-                                  ? colors.accent
-                                  : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        child: Text(
-                          labels[kind]!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: widget.kind == kind
-                                ? colors.accent
-                                : colors.ink,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          CreativePanelTabs(controller: c),
           if (!c.work!.notesComplete && c.work!.isLazy)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),

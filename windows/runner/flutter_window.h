@@ -9,6 +9,7 @@
 #include "win32_window.h"
 #include "native_novel_editor.h"
 #include "update_safety_gate.h"
+#include "ai_credentials.h"
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
@@ -31,6 +32,7 @@ class FlutterWindow : public Win32Window {
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
   std::unique_ptr<NativeNovelEditor> editor_;
+  std::unique_ptr<AiCredentials> ai_credentials_;
   std::unique_ptr<UpdateSafetyGate> update_safety_;
 };
 

@@ -26,6 +26,8 @@ import '../works/work_repository.dart';
 import '../works/work_codec.dart';
 import '../typing_sound/typing_sound_settings.dart';
 import 'work_load_progress.dart';
+import '../ai/ai_controller.dart';
+import '../../core/storage/work_key.dart';
 
 class WorkbenchController extends ChangeNotifier {
   WorkbenchController(
@@ -38,10 +40,22 @@ class WorkbenchController extends ChangeNotifier {
        preferencesStore = PreferencesStore(dataRoot),
        history = HistoryStore(dataRoot),
        recovery = RecoveryStore(dataRoot) {
+    ai = AiController(dataRoot);
+    beforeQuit = ai.prepareToQuit;
     session.addListener(_sessionChanged);
   }
 
   final Directory dataRoot;
+  late final AiController ai;
+  bool aiPanelVisible = false;
+  bool _beforeFocusAi = false;
+  bool get rightPanelVisible => panel != null || aiPanelVisible;
+  void showAiPanel() {
+    panel = null;
+    aiPanelVisible = true;
+    notifyListeners();
+  }
+
   final Future<WorkHandle> Function(Directory) _openRepository;
   WorkLoadProgress? loadProgress;
   bool get chapterLoading =>
@@ -248,6 +262,7 @@ class WorkbenchController extends ChangeNotifier {
   }
 
   Future<void> initialize({bool demo = false}) async {
+    await ai.initialize();
     try {
       preferences = await preferencesStore.load();
       notice = preferencesStore.warning;
@@ -346,7 +361,15 @@ class WorkbenchController extends ChangeNotifier {
       if (!await flushAll()) throw const FormatException('请先处理尚未保存的内容');
       final next = await _openRepository(directory);
       if (_disposed || generation != _loadGeneration) return;
+      await _libraryChanges;
+      if (_disposed || generation != _loadGeneration) return;
+      if (!await flushAll()) throw const FormatException('请先处理尚未保存的内容');
+      if (_disposed || generation != _loadGeneration) return;
       await _watch?.cancel();
+      if (_disposed || generation != _loadGeneration) return;
+      await ai.activateWork(
+        workKeyForPath(next.root.path, next.manifest.workId),
+      );
       if (_disposed || generation != _loadGeneration) return;
       notes?.dispose();
       work = next;
@@ -584,7 +607,29 @@ class WorkbenchController extends ChangeNotifier {
     );
   });
 
-  Future<bool> prepareToQuit() => prepareForUpdate();
+  Future<bool> Function()? beforeQuit;
+  Future<bool>? _quitting;
+  Future<bool> prepareToQuit() =>
+      _quitting ??= _prepareToQuit().whenComplete(() => _quitting = null);
+  Future<bool> _prepareToQuit() async {
+    if (!await prepareForUpdate()) return false;
+    try {
+      if (beforeQuit != null && !await beforeQuit!()) {
+        await resumeAfterUpdate();
+        return false;
+      }
+      await history.drain();
+      cancelLoad();
+      _watchTimer?.cancel();
+      _historyTimer?.cancel();
+      await _watch?.cancel();
+      return true;
+    } catch (_) {
+      notice = '退出前保存未完成，请重试';
+      await resumeAfterUpdate();
+      return false;
+    }
+  }
 
   Future<bool> prepareForUpdate() {
     if (_disposed) return Future.value(false);
@@ -811,17 +856,21 @@ class WorkbenchController extends ChangeNotifier {
     if (!focusMode) {
       _beforeFocusLeft = leftVisible;
       _beforeFocusPanel = panel;
+      _beforeFocusAi = aiPanelVisible;
+      aiPanelVisible = false;
       leftVisible = false;
       panel = null;
     } else {
       leftVisible = _beforeFocusLeft;
       panel = _beforeFocusPanel;
+      aiPanelVisible = _beforeFocusAi;
     }
     focusMode = !focusMode;
     notifyListeners();
   }
 
   void setPanel(NoteKind? value) {
+    aiPanelVisible = false;
     panel = value;
     notifyListeners();
   }
@@ -1200,6 +1249,7 @@ class WorkbenchController extends ChangeNotifier {
     updates?.dispose();
     notes?.dispose();
     session.removeListener(_sessionChanged);
+    ai.dispose();
     session.dispose();
     super.dispose();
   }

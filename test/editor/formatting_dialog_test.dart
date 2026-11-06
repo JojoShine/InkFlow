@@ -36,6 +36,7 @@ void main() {
       );
       final text = c.session.controller.text;
       final key = c.workKey, id = c.activeChapterId!;
+      c.history.invalidate(key, id);
       c.session.synchronizeNative = (_) async {
         Timer.run(() => c.work = other);
       };

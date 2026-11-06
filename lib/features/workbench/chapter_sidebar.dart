@@ -271,7 +271,7 @@ class _ChapterSidebarState extends State<ChapterSidebar> {
                 if (entry.isHeader) return _volumeRow(entry.volume);
                 if (entry.chapterId != null && entry.chapter == null) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted)
+                    if (mounted) {
                       unawaited(
                         c.loadVisibleChapters(
                           entries
@@ -281,6 +281,7 @@ class _ChapterSidebarState extends State<ChapterSidebar> {
                               .whereType<String>(),
                         ),
                       );
+                    }
                   });
                   return ListTile(
                     key: ValueKey('pending-${entry.chapterId}'),

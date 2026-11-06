@@ -25,6 +25,7 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  ai_credentials_ = std::make_unique<AiCredentials>(flutter_controller_->engine()->messenger());
   update_safety_ = std::make_unique<UpdateSafetyGate>(GetHandle(), flutter_controller_->engine()->messenger());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
   editor_ = std::make_unique<NativeNovelEditor>(GetHandle(), flutter_controller_->engine()->messenger());
@@ -42,6 +43,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  ai_credentials_.reset();
   update_safety_.reset();
   editor_.reset();
   if (flutter_controller_) {

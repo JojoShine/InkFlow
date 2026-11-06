@@ -55,7 +55,11 @@ Future<void> main(List<String> arguments) async {
   await windowManager.setPreventClose(true);
   const lifecycle = MethodChannel('inkflow/lifecycle');
   lifecycle.setMethodCallHandler((call) async {
-    if (call.method == 'requestQuit') return controller.prepareToQuit();
+    if (call.method == 'requestQuit') {
+      final saved = await controller.prepareToQuit();
+      if (saved) await _instanceLease?.close();
+      return saved;
+    }
     if (call.method == 'fileAction') {
       await ready.future;
       await dispatchDesktopAction(controller, call.arguments as String);
@@ -160,6 +164,10 @@ Future<UpdateController> _createUpdates(WorkbenchController controller) async {
     prepareForInstall: controller.prepareForUpdate,
     resumeEditing: controller.resumeAfterUpdate,
     quitAfterPrepared: () async {
+      if (controller.beforeQuit != null && !await controller.beforeQuit!()) {
+        throw StateError('对话尚未保存');
+      }
+      await _instanceLease?.close();
       await const MethodChannel(
         'inkflow/lifecycle',
       ).invokeMethod<void>('allowQuit');
@@ -203,6 +211,7 @@ class _AppWindow with WindowListener {
             'inkflow/lifecycle',
           ).invokeMethod<void>('allowQuit');
         }
+        await _instanceLease?.close();
         await windowManager.destroy();
         return;
       }

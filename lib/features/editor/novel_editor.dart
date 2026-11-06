@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui' as ui;
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -45,6 +47,75 @@ class _NovelEditorState extends State<NovelEditor> with WidgetsBindingObserver {
   final _windowsHost = GlobalKey();
   final _fallbackFocus = FocusNode();
   bool _windowsReady = false;
+  ui.Image? _snapshot;
+  bool _capturingSnapshot = false;
+  bool _snapshotFailed = false;
+  int _snapshotGeneration = 0;
+  bool _snapshotAgain = false;
+
+  Future<void> _captureSnapshot() async {
+    if (_capturingSnapshot) {
+      _snapshotAgain = true;
+      return;
+    }
+    if (!_windowsReady || _windowsVisible || !mounted) return;
+    _capturingSnapshot = true;
+    final request = ++_snapshotGeneration;
+    final documentGeneration = widget.session.documentGeneration;
+    try {
+      final value = await _channel!
+          .invokeMapMethod<Object?, Object?>('snapshot', {
+            'documentId': widget.session.chapterId ?? 'probe',
+            'documentGeneration': documentGeneration,
+          });
+      if (value == null) throw const FormatException('正文预览暂不可用');
+      final width = value['width'] as int, height = value['height'] as int;
+      final bytes = value['pixels'] as Uint8List;
+      if (width <= 0 ||
+          height <= 0 ||
+          width * height > 16777216 ||
+          bytes.length != width * height * 4) {
+        throw const FormatException('正文预览数据不完整');
+      }
+      final ready = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+        bytes,
+        width,
+        height,
+        ui.PixelFormat.bgra8888,
+        ready.complete,
+        rowBytes: value['rowBytes'] as int,
+      );
+      final image = await ready.future;
+      if (!mounted ||
+          request != _snapshotGeneration ||
+          _windowsVisible ||
+          widget.session.documentGeneration != documentGeneration) {
+        image.dispose();
+        return;
+      }
+      final previous = _snapshot;
+      setState(() {
+        _snapshot = image;
+        _snapshotFailed = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        previous?.dispose();
+        if (mounted) _syncWindowsBounds();
+      });
+    } catch (_) {
+      if (mounted && request == _snapshotGeneration) {
+        setState(() => _snapshotFailed = true);
+      }
+    } finally {
+      _capturingSnapshot = false;
+      if (_snapshotAgain && mounted && !_windowsVisible) {
+        _snapshotAgain = false;
+        unawaited(_captureSnapshot());
+      }
+    }
+  }
+
   bool _windowsVisible = true;
   Rect? _lastBounds;
   bool? _lastVisible;
@@ -337,7 +408,11 @@ class _NovelEditorState extends State<NovelEditor> with WidgetsBindingObserver {
       render.size.height * scale,
     );
     if (_lastBounds != bounds) {
+      final previousBounds = _lastBounds;
       _lastBounds = bounds;
+      if (previousBounds != null && !_windowsVisible) {
+        unawaited(_captureSnapshot());
+      }
       _channel?.invokeMethod<void>('bounds', {
         'x': bounds.left.round(),
         'y': bounds.top.round(),
@@ -346,9 +421,25 @@ class _NovelEditorState extends State<NovelEditor> with WidgetsBindingObserver {
         'scale': scale,
       });
     }
+    if (!_windowsVisible && _snapshot == null && !_snapshotFailed) {
+      if (!_capturingSnapshot) unawaited(_captureSnapshot());
+      return;
+    }
     if (_lastVisible != _windowsVisible) {
       _lastVisible = _windowsVisible;
       _channel?.invokeMethod<void>('visible', _windowsVisible);
+      if (_windowsVisible) {
+        _snapshotGeneration++;
+        _snapshotFailed = false;
+        final old = _snapshot;
+        _snapshot = null;
+        if (old != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            old.dispose();
+            if (mounted) setState(() {});
+          });
+        }
+      }
     }
   }
 
@@ -374,13 +465,18 @@ class _NovelEditorState extends State<NovelEditor> with WidgetsBindingObserver {
         oldWidget.textColor.toARGB32() != widget.textColor.toARGB32() ||
         oldWidget.backgroundColor.toARGB32() !=
             widget.backgroundColor.toARGB32()) {
-      _channel?.invokeMethod<void>('configure', _configuration);
+      _channel?.invokeMethod<void>('configure', _configuration).then((_) {
+        if (mounted && !_windowsVisible) unawaited(_captureSnapshot());
+      });
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _snapshotGeneration++;
+    _snapshot?.dispose();
+    _snapshot = null;
     if (_windowsReady) _channel?.invokeMethod<void>('destroy');
     widget.session.removeListener(_sessionChanged);
     widget.session.nativeLockForUpdate = null;
@@ -435,7 +531,18 @@ class _NovelEditorState extends State<NovelEditor> with WidgetsBindingObserver {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _syncWindowsBounds();
       });
-      return SizedBox.expand(key: _windowsHost);
+      return SizedBox.expand(
+        key: _windowsHost,
+        child: _snapshot == null
+            ? null
+            : IgnorePointer(
+                child: RawImage(
+                  image: _snapshot,
+                  fit: BoxFit.fill,
+                  filterQuality: FilterQuality.none,
+                ),
+              ),
+      );
     }
     return LayoutBuilder(
       builder: (context, constraints) {

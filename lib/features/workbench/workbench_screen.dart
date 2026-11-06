@@ -22,6 +22,7 @@ import 'chapter_sidebar.dart';
 import 'workbench_controller.dart';
 import 'work_actions_menu.dart';
 import '../../app/ink_icons.dart';
+import '../ai/ai_panel.dart';
 
 class WorkbenchScreen extends StatelessWidget {
   const WorkbenchScreen({super.key, required this.controller});
@@ -178,7 +179,7 @@ class WorkbenchScreen extends StatelessWidget {
                                 (c.leftVisible ? leftWidth + 6 : 0) -
                                 546;
                             final showRight =
-                                c.panel != null && rightSpace >= 260;
+                                c.rightPanelVisible && rightSpace >= 260;
                             final rightWidth = c.preferences.notesPanelWidth
                                 .clamp(260.0, rightSpace.clamp(260.0, 520.0));
                             return Row(
@@ -303,14 +304,21 @@ class WorkbenchScreen extends StatelessWidget {
                                         c.updatePanelWidths(notes: 320),
                                   ),
                                 if (showRight)
-                                  NotesPanel(
-                                    key: ValueKey(
-                                      '${c.work!.manifest.workId}-${c.panel}',
+                                  if (c.aiPanelVisible)
+                                    AiPanel(
+                                      workbench: c,
+                                      controller: c.ai,
+                                      width: rightWidth,
+                                    )
+                                  else
+                                    NotesPanel(
+                                      key: ValueKey(
+                                        '${c.work!.manifest.workId}-${c.panel}',
+                                      ),
+                                      controller: c,
+                                      kind: c.panel!,
+                                      width: rightWidth,
                                     ),
-                                    controller: c,
-                                    kind: c.panel!,
-                                    width: rightWidth,
-                                  ),
                               ],
                             );
                           },
@@ -400,12 +408,12 @@ class _Toolbar extends StatelessWidget {
               icon: const Icon(InkIcons.sidebar, size: 20),
             ),
             IconButton(
-              tooltip: c.panel == null ? '展开创作资料' : '收起创作资料',
+              tooltip: !c.rightPanelVisible ? '展开创作资料' : '收起创作资料',
               onPressed: () {
                 if (MediaQuery.sizeOf(context).width < 1100 && c.leftVisible) {
                   c.toggleLeft();
                 }
-                c.setPanel(c.panel == null ? NoteKind.outline : null);
+                c.setPanel(!c.rightPanelVisible ? NoteKind.outline : null);
               },
               icon: const Icon(InkIcons.sidebarRight, size: 20),
             ),

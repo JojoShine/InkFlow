@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import '../../features/works/work_models.dart';
@@ -15,16 +16,51 @@ class HistoryEntry {
 class HistoryStore {
   HistoryStore(this.root);
   final Directory root;
+  final _queues = <String, Future<void>>{};
+  final _latest = <String, String>{};
+  Future<void> drain() => Future.wait(_queues.values.toList());
+  void invalidate(String workKey, String recordId) {
+    _latest.remove('$workKey/$recordId');
+  }
+
   Future<void> capture(
     String workKey,
     String recordId,
     List<int> bytes,
     DateTime now,
+  ) {
+    final key = '$workKey/$recordId';
+    final snapshot = List<int>.of(bytes);
+    final task = (_queues[key] ?? Future<void>.value()).then((_) async {
+      try {
+        await _capture(workKey, recordId, snapshot, now);
+      } catch (_) {
+        _latest.remove(key);
+        rethrow;
+      }
+    });
+    _queues[key] = task.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {},
+    );
+    return task;
+  }
+
+  Future<void> _capture(
+    String workKey,
+    String recordId,
+    List<int> bytes,
+    DateTime now,
   ) async {
-    await root.create(recursive: true);
-    final entries = await list(workKey, recordId);
+    final key = '$workKey/$recordId';
     final hash = RecordVersion.of(bytes).hash;
-    if (entries.isNotEmpty && entries.last.hash == hash) return;
+    if (_latest[key] == hash) return;
+    await root.create(recursive: true);
+    final entries = await _listDisk(workKey, recordId);
+    if (entries.isNotEmpty && entries.last.hash == hash) {
+      _latest[key] = hash;
+      return;
+    }
     final path =
         'history/$workKey/$recordId/${now.microsecondsSinceEpoch}-${newId()}.json';
     final result = await RecordStore(LocalFileStore(root)).write(
@@ -39,13 +75,23 @@ class HistoryStore {
       expected: null,
     );
     if (!result.isSaved) throw SaveException(result);
-    final all = await list(workKey, recordId);
+    final all = [
+      ...entries,
+      HistoryEntry(LocalFileStore(root).file(path).path, now.toUtc(), hash),
+    ];
     for (final old in all.take(all.length > 100 ? all.length - 100 : 0)) {
       await File(old.path).delete();
     }
+    _latest[key] = hash;
   }
 
   Future<List<HistoryEntry>> list(String workKey, String recordId) async {
+    await (_queues['$workKey/$recordId'] ?? Future<void>.value());
+    invalidate(workKey, recordId);
+    return _listDisk(workKey, recordId);
+  }
+
+  Future<List<HistoryEntry>> _listDisk(String workKey, String recordId) async {
     final files = LocalFileStore(root);
     final directory = files
         .file('history/$workKey/$recordId/record.json')

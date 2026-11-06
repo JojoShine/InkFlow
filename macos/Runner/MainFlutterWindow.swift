@@ -2,6 +2,7 @@ import Cocoa
 import FlutterMacOS
 
 class MainFlutterWindow: NSWindow {
+  private var aiCredentials: AiCredentials?
   private var directoryAccess: DirectoryAccess?
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -14,6 +15,7 @@ class MainFlutterWindow: NSWindow {
     registrar.register(NovelEditorFactory(messenger: registrar.messenger),
                        withId: "inkflow/novel-editor")
     directoryAccess = DirectoryAccess(messenger: registrar.messenger)
+    aiCredentials = AiCredentials(messenger: registrar.messenger)
     (NSApplication.shared.delegate as? AppDelegate)?.configureLifecycle(messenger: registrar.messenger)
 
     super.awakeFromNib()

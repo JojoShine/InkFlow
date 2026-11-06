@@ -89,4 +89,19 @@ void main() {
       isFalse,
     );
   });
+  test('purging a loaded note keeps lazy pagination complete', () async {
+    final original = await WorkRepository.create(root, '资料');
+    final note = NoteRecord(
+      id: newId(),
+      kind: NoteKind.inspiration,
+      title: '删除',
+    );
+    await original.saveNote(note);
+    final work = await WorkRepository.open(root, lazy: true);
+    await work.readNextNotes();
+    await work.trash(note.id);
+    await work.purge(note.id);
+    expect(work.notesComplete, isTrue);
+    expect(await work.readNextNotes(), isEmpty);
+  });
 }
