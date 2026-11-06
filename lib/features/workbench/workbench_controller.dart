@@ -682,11 +682,6 @@ class WorkbenchController extends ChangeNotifier {
   Future<bool> _prepareToQuit() async {
     if (!await prepareForUpdate()) return false;
     try {
-      if (beforeQuit != null && !await beforeQuit!()) {
-        notice = 'AI 对话尚未保存，请在 AI 页签重试或选择放弃本次对话保存';
-        await resumeAfterUpdate();
-        return false;
-      }
       await history.drain();
       cancelLoad();
       _watchTimer?.cancel();
@@ -718,7 +713,14 @@ class WorkbenchController extends ChangeNotifier {
       if (_disposed || generation != _updateGeneration) return false;
       busy = true;
       notifyListeners();
-      final saved = await flushAll();
+      var saved = await flushAll();
+      if (_disposed || generation != _updateGeneration) return false;
+      if (saved && beforeQuit != null) {
+        saved = await beforeQuit!();
+        if (!saved) {
+          notice = 'AI 对话尚未保存，请在 AI 页签重试或选择放弃本次对话保存';
+        }
+      }
       if (_disposed || generation != _updateGeneration) return false;
       if (saved) {
         _updatePrepared = true;

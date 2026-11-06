@@ -61,6 +61,17 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(feeds, {})
         self.assertFalse(manifest['automaticUpdates'])
 
+    def test_verified_update_signatures_do_not_require_apple_notarization(self):
+        self.all_packages()
+        for platform, arch in release.TARGETS:
+            sidecar = self.root / (release.filename('0.1.0', 2, platform, arch) + '.json')
+            meta = json.loads(sidecar.read_text())
+            meta['notarized'] = False
+            sidecar.write_text(json.dumps(meta))
+        manifest, feeds = release.prepare(self.root, '0.1.0', 2, [], '2026-11-07T00:00:00Z')
+        self.assertEqual(len(feeds), 3)
+        self.assertTrue(manifest['automaticUpdates'])
+
     def test_downloads_only_still_rejects_tampered_package(self):
         for platform, arch in release.TARGETS:
             self.package(platform, arch, signature=False)

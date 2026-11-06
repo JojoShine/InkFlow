@@ -90,6 +90,28 @@ void main() {
     c.dispose();
     await root.delete(recursive: true);
   });
+  test(
+    'cancellation during AI save cannot approve a late installation',
+    () async {
+      final root = await Directory.systemTemp.createTemp('inkflow-update-ai');
+      final c = WorkbenchController(root)..busy = false;
+      final started = Completer<void>();
+      final saved = Completer<bool>();
+      c.beforeQuit = () {
+        started.complete();
+        return saved.future;
+      };
+      final preparation = c.prepareForUpdate();
+      await started.future;
+      await c.resumeAfterUpdate();
+      saved.complete(true);
+      expect(await preparation, isFalse);
+      expect(c.session.isUpdateLocked, isFalse);
+      expect(c.busy, isFalse);
+      c.dispose();
+      await root.delete(recursive: true);
+    },
+  );
   test('cancelled slow save cannot later mark installation prepared', () async {
     final root = await Directory.systemTemp.createTemp('inkflow-update-test');
     final c = DelayedSaveController(root)..busy = false;

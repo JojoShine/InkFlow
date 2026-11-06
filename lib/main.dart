@@ -164,9 +164,6 @@ Future<UpdateController> _createUpdates(WorkbenchController controller) async {
     prepareForInstall: controller.prepareForUpdate,
     resumeEditing: controller.resumeAfterUpdate,
     quitAfterPrepared: () async {
-      if (controller.beforeQuit != null && !await controller.beforeQuit!()) {
-        throw StateError('对话尚未保存');
-      }
       await _instanceLease?.close();
       await const MethodChannel(
         'inkflow/lifecycle',

@@ -53,6 +53,8 @@ def prepare(directory, version, build, notes, published_at, *, require_signed_up
     directory = Path(directory)
     manifest = dict(version=version, build=build, publishedAt=published_at, notes=notes, downloads=[])
     feeds = {}
+    if require_signed_updates:
+        manifest.update(automaticUpdates=True)
     if not require_signed_updates:
         manifest.update(channel='preview', automaticUpdates=False,
             distributionNote='此版本提供安装包下载，应用内自动更新尚未启用。')
@@ -75,8 +77,8 @@ def prepare(directory, version, build, notes, published_at, *, require_signed_up
             continue
         signature = meta.get('signature', '')
         raw = base64.b64decode(signature, validate=True)
-        if not raw or (platform == 'macos' and (len(raw) != 64 or not meta.get('notarized'))):
-            raise ValueError(f'missing verified signature/notarization: {name}')
+        if not raw or (platform == 'macos' and len(raw) != 64):
+            raise ValueError(f'missing verified update signature: {name}')
         rss = ET.Element('rss', version='2.0')
         channel = ET.SubElement(rss, 'channel')
         ET.SubElement(channel, 'title').text = f'InkFlow {platform} {arch}'
@@ -163,7 +165,7 @@ def main():
     parser.add_argument('--output', default='release-preview')
     parser.add_argument('--publish', action='store_true')
     parser.add_argument('--downloads-only', action='store_true', help='Publish manual downloads without requiring Apple or update signing; never writes appcast feeds')
-    parser.add_argument('--site-root', default='.')
+    parser.add_argument('--site-root', help='Also publish this website directory when explicitly supplied')
     args = parser.parse_args()
     version, build = read_version(args.pubspec, args.tag)
     notes = [line.strip() for line in Path(args.notes).read_text().splitlines() if line.strip()]

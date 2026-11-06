@@ -91,7 +91,7 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
   final Future<PublishedRelease> Function()? checkPublishedRelease;
   final Future<void> Function(Uri? uri)? openDownloadPage;
   bool get usesDownloadUpdates =>
-      checkPublishedRelease != null && openDownloadPage != null;
+      !enabled && checkPublishedRelease != null && openDownloadPage != null;
   final bool enabled, automaticChecks;
   final String disabledReason;
   final Future<bool> Function() saveBeforeCheck, prepareForInstall;

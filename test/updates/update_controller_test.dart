@@ -233,24 +233,26 @@ void main() {
       expect(controller.canCheck, isTrue);
     },
   );
-  test('OSS version checks are independent of signing configuration', () async {
+  test('signed builds use native updates even with a download fallback', () async {
     controller.dispose();
     controller = UpdateController(
       enabled: true,
       backend: backend,
+      platform: TargetPlatform.macOS,
+      automaticChecks: false,
       loadAppInfo: () async => const AppInfo('InkFlow', '0.1.0', '1'),
-      checkPublishedRelease: () async => const PublishedRelease('0.1.1', 2),
-      openDownloadPage: (_) async {},
+      checkPublishedRelease: () async => throw StateError('fallback used'),
+      openDownloadPage: (_) async => fail('browser opened'),
       saveBeforeCheck: () async => true,
       prepareForInstall: () async => true,
       quitAfterPrepared: () async {},
       resumeEditing: () async {},
     );
     await controller.checkForUpdates();
-    expect(controller.status, UpdateStatus.available);
-    expect(controller.availableVersion, '0.1.1');
-    expect(backend.feed, isNull);
-    expect(backend.checks, 0);
+    expect(controller.usesDownloadUpdates, isFalse);
+    expect(controller.status, UpdateStatus.checking);
+    expect(backend.feed, UpdateController.macosFeedURL);
+    expect(backend.checks, 1);
   });
   test('backend safety must succeed before feed initialization', () async {
     controller.dispose();

@@ -39,4 +39,4 @@ Name: "{autodesktop}\InkFlow"; Filename: "{app}\inkflow.exe"; Tasks: desktopicon
 [Tasks]
 Name: desktopicon; Description: "Create a desktop shortcut"; Flags: unchecked
 [Run]
-Filename: "{app}\inkflow.exe"; Description: "Launch InkFlow"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\inkflow.exe"; Description: "Launch InkFlow"; Flags: nowait postinstall

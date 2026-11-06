@@ -18,7 +18,7 @@ app = Path('build/macos/Build/Products/Release/inkflow.app')
 Path('dist/notarized').unlink(missing_ok=True)
 required = ('MACOS_CERTIFICATE_P12', 'MACOS_CERTIFICATE_PASSWORD', 'MACOS_SIGN_IDENTITY', 'APPLE_ID', 'APPLE_APP_PASSWORD', 'APPLE_TEAM_ID')
 if not all(os.environ.get(key) for key in required):
-    print('Developer ID/notarization not configured: CI artifact only')
+    print('Developer ID/notarization not configured; update archive signatures are handled separately')
 else:
     with tempfile.TemporaryDirectory() as folder:
         folder = Path(folder)
