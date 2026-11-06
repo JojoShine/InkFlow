@@ -75,6 +75,13 @@ class WorkHandle {
        store = recordStore ?? RecordStore(LocalFileStore(root));
   final bool isLazy;
   final _reads = WorkReadCoordinator();
+  int _readGeneration = 0;
+  void cancelPendingReads() {
+    _readGeneration++;
+    _reads.invalidate();
+    _notePage = null;
+  }
+
   List<String>? _noteFiles;
   Future<List<NoteRecord>>? _notePage;
   bool get notesComplete =>
@@ -101,7 +108,10 @@ class WorkHandle {
 
   RecordVersion? noteVersion(String id) => _versions[_note(id)];
 
-  Future<void> reload({Set<String>? changedPaths}) async {
+  Future<void> reload({
+    Set<String>? changedPaths,
+    bool refreshInventory = false,
+  }) async {
     final raw = await store.read('work.json');
     if (raw == null) throw const FormatException('作品清单暂不可用，原稿未改动');
     final next = WorkCodec.decodeManifest(raw.bytes);
@@ -109,6 +119,7 @@ class WorkHandle {
       throw const FormatException('作品身份已变化，请重新打开作品');
     }
     if (isLazy) {
+      if (changedPaths == null || refreshInventory) _noteFiles = null;
       manifest = next;
       _versions['work.json'] = raw.version;
       chapters.removeWhere((id, _) => !next.chapterIds.contains(id));
@@ -129,8 +140,9 @@ class WorkHandle {
         }
       }
       await loadChapterMetadata(chapterIds);
+      if (refreshInventory || noteIds.isNotEmpty) await refreshNoteInventory();
       for (final id in noteIds) {
-        await readNote(id);
+        if (_noteFiles!.contains(id)) await readNote(id);
       }
       return;
     }
@@ -173,6 +185,7 @@ class WorkHandle {
   }
 
   Future<void> loadChapterMetadata(Iterable<String> ids) async {
+    final generation = _readGeneration;
     await Future.wait(
       ids.map(
         (id) => _reads.run(id, () async {
@@ -184,6 +197,7 @@ class WorkHandle {
           if (raw == null) throw const FormatException('章节信息暂不可用，请等待同步后重试');
           final record = WorkCodec.decodeChapter(raw.bytes);
           if (record.id != id) throw const FormatException('章节记录与文件名不一致');
+          if (generation != _readGeneration) return;
           chapters[id] = record;
           _versions[path] = raw.version;
         }),
@@ -202,28 +216,41 @@ class WorkHandle {
     return record;
   }
 
-  Future<List<NoteRecord>> readNextNotes() =>
-      _notePage ??= _readNotePage().whenComplete(() => _notePage = null);
-  Future<List<NoteRecord>> _readNotePage() async {
-    if (_noteFiles == null) {
-      final directory = store.files.file('notes/record.json').parent;
-      final ids = <String>[];
-      if (await directory.exists()) {
-        await for (final file in directory.list()) {
-          final name = file.uri.pathSegments.last;
-          if (file is File && RegExp(r'^[a-f0-9]{32}\.json$').hasMatch(name)) {
-            ids.add(name.substring(0, 32));
-          }
+  Future<void> refreshNoteInventory() async {
+    final directory = store.files.file('notes/record.json').parent;
+    final ids = <String>[];
+    if (await directory.exists()) {
+      await for (final file in directory.list()) {
+        final name = file.uri.pathSegments.last;
+        if (file is File && RegExp(r'^[a-f0-9]{32}\.json$').hasMatch(name)) {
+          ids.add(name.substring(0, 32));
         }
       }
-      _noteFiles = ids..sort();
     }
-    final ids = _noteFiles!
-        .where((id) => !notes.containsKey(id))
-        .take(16)
-        .toList();
+    _noteFiles = ids..sort();
+    notes.removeWhere((id, _) => !ids.contains(id));
+  }
+
+  Future<List<NoteRecord>> readNextNotes() {
+    if (_notePage != null) return _notePage!;
+    late final Future<List<NoteRecord>> task;
+    task = _readNotePage().whenComplete(() {
+      if (identical(_notePage, task)) _notePage = null;
+    });
+    _notePage = task;
+    return task;
+  }
+
+  Future<List<NoteRecord>> _readNotePage() async {
+    final generation = _readGeneration;
+    if (_noteFiles == null) await refreshNoteInventory();
     final result = <NoteRecord>[];
-    for (final id in ids) {
+    for (final id
+        in _noteFiles!
+            .where((id) => !notes.containsKey(id))
+            .take(16)
+            .toList()) {
+      if (generation != _readGeneration) break;
       result.add(await readNote(id));
     }
     return result;
@@ -239,14 +266,20 @@ class WorkHandle {
     }
   }
 
-  Future<void> ensureAllMetadata() async {
+  Future<void> ensureAllMetadata({bool refresh = false}) async {
+    if (isLazy) await refreshNoteInventory();
     final missing = manifest.chapterIds
-        .where((id) => !chapters.containsKey(id))
+        .where((id) => refresh || !chapters.containsKey(id))
         .toList();
     for (var i = 0; i < missing.length; i += 32) {
       await loadChapterMetadata(missing.skip(i).take(32));
     }
     if (isLazy) {
+      if (refresh) {
+        for (final id in _noteFiles!.toList()) {
+          await readNote(id);
+        }
+      }
       do {
         await readNextNotes();
       } while (!notesComplete);
@@ -601,7 +634,7 @@ class WorkHandle {
 
   Future<void> purge(String id) async {
     await _ensureRecord(id);
-    await ensureAllMetadata();
+    await ensureAllMetadata(refresh: true);
     if (chapters.containsKey(id)) {
       if (!chapters[id]!.isDeleted) throw const FormatException('请先将章节移入回收站');
       final changed = {

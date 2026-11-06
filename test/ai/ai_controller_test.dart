@@ -22,6 +22,7 @@ class MemoryKeys implements AiCredentials {
 }
 
 class FakeAiClient extends AiClient {
+  int cancellations = 0;
   final streams = <StreamController<AiEvent>>[];
   final payloads = <List<AiChatMessage>>[];
   @override
@@ -33,7 +34,9 @@ class FakeAiClient extends AiClient {
     final c = StreamController<AiEvent>();
     streams.add(c);
     payloads.add(messages);
-    return AiRequest(c.stream, () async {});
+    return AiRequest(c.stream, () async {
+      cancellations++;
+    });
   }
 }
 

@@ -34,7 +34,7 @@ class AiSettings {
   Uri get completionUri => Uri.parse('$normalizedUrl/chat/completions');
   String get credentialId =>
       sha256.convert(utf8.encode('${provider.name}|$normalizedUrl')).toString();
-  String get connectionId => '$credentialId|$model';
+  String get connectionId => '$credentialId|${model.trim()}';
   void validate() {
     final uri = Uri.tryParse(normalizedUrl);
     if (uri == null ||

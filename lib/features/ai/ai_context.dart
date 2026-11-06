@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:characters/characters.dart';
+import 'package:crypto/crypto.dart';
 import '../workbench/workbench_controller.dart';
 import 'ai_settings.dart';
 export 'ai_settings.dart' show AiChatMessage;
@@ -25,10 +26,21 @@ class AiAttachment {
     required this.chapterTitle,
     required this.documentGeneration,
     required this.text,
+    this.sourceHash = '',
   });
   final AiContextSource source;
   final String workKey, chapterId, chapterTitle, text;
   final int documentGeneration;
+  final String sourceHash;
+  bool isStale(WorkbenchController c) =>
+      c.workKey != workKey ||
+      c.activeChapterId != chapterId ||
+      c.session.documentGeneration != documentGeneration ||
+      (sourceHash.isNotEmpty &&
+          sourceHash !=
+              sha256
+                  .convert(utf8.encode(c.session.controller.text))
+                  .toString());
   int get characterCount => text.characters.length;
   Map<String, Object> toJson() => {
     'source': source.name,
@@ -37,6 +49,7 @@ class AiAttachment {
     'chapterTitle': chapterTitle,
     'documentGeneration': documentGeneration,
     'text': text,
+    'sourceHash': sourceHash,
   };
   factory AiAttachment.fromJson(Map<String, dynamic> j) => AiAttachment(
     source: AiContextSource.values.byName(j['source'] as String),
@@ -45,6 +58,7 @@ class AiAttachment {
     chapterTitle: j['chapterTitle'] as String,
     documentGeneration: j['documentGeneration'] as int,
     text: j['text'] as String,
+    sourceHash: j['sourceHash'] as String? ?? '',
   );
 }
 
@@ -96,6 +110,7 @@ Future<AiAttachment?> captureAiAttachment({
     chapterTitle: controller.activeChapter!.title,
     documentGeneration: generation,
     text: text,
+    sourceHash: sha256.convert(utf8.encode(value.text)).toString(),
   );
 }
 

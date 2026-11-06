@@ -67,10 +67,18 @@ class _NotesPanelState extends State<NotesPanel> {
                     ),
                   ),
                   TextButton(
-                    onPressed: c.loadMoreNotes,
-                    child: const Text('继续加载资料'),
+                    onPressed: c.notesLoading ? null : c.loadMoreNotes,
+                    child: Text(c.notesLoading ? '正在读取资料…' : '继续加载资料'),
                   ),
                 ],
+              ),
+            ),
+          if (c.notesLoadingSlow)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14),
+              child: Text(
+                '文件读取较慢，云盘可能需要下载，请保持联网或稍后重试',
+                style: TextStyle(fontSize: 12),
               ),
             ),
           if (selected != null && !selected.isDeleted)

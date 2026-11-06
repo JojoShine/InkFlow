@@ -5,6 +5,7 @@ import 'package:inkflow/core/storage/record_store.dart';
 import 'package:inkflow/features/works/work_repository.dart';
 import 'package:inkflow/features/notes/note_models.dart';
 import 'package:inkflow/features/works/work_models.dart';
+import 'package:inkflow/features/works/work_codec.dart';
 import 'package:inkflow/features/transfer/text_transfer.dart';
 
 class CountingStore extends RecordStore {
@@ -104,4 +105,37 @@ void main() {
     expect(work.notesComplete, isTrue);
     expect(await work.readNextNotes(), isEmpty);
   });
+  test(
+    'a thousand-chapter catalog does not hydrate unavailable offscreen content',
+    () async {
+      final ids = List.generate(
+        1000,
+        (i) => i.toRadixString(16).padLeft(32, '0'),
+      );
+      await File('${root.path}/work.json').writeAsBytes(
+        WorkCodec.encodeManifest(
+          WorkManifest(workId: 'f' * 32, title: '千章云端作品', chapterIds: ids),
+        ),
+      );
+      await Directory('${root.path}/chapters').create();
+      for (final id in ids.take(32)) {
+        await File('${root.path}/chapters/$id.json').writeAsBytes(
+          WorkCodec.encode(ChapterRecord(id: id, title: '章节').toJson()),
+        );
+      }
+      await File(
+        '${root.path}/chapters/${ids.first}.txt',
+      ).writeAsString('当前章节');
+      final store = CountingStore(LocalFileStore(root));
+      final work = await WorkRepository.open(root, lazy: true, store: store);
+      expect(work.manifest.chapterIds, hasLength(1000));
+      expect(store.reads.every((p) => p == 'work.json'), isTrue);
+      await work.loadChapterMetadata(ids.take(32));
+      await work.readChapter(ids.first);
+      expect(work.chapters, hasLength(32));
+      expect(store.reads.where((p) => p.endsWith('.txt')), [
+        'chapters/${ids.first}.txt',
+      ]);
+    },
+  );
 }

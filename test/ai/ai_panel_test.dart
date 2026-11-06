@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
+import 'dart:ui' as ui;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkflow/app/inkflow_app.dart';
 import 'package:inkflow/features/ai/ai_panel.dart';
@@ -10,6 +13,24 @@ void main() {
   testWidgets('AI tab is reachable and a quick action only fills a draft', (
     tester,
   ) async {
+    if (Platform.environment['INKFLOW_UI_CAPTURE'] != null) {
+      await tester.runAsync(() async {
+        final textFont = FontLoader('Songti SC')
+          ..addFont(
+            File(
+              '/System/Library/Fonts/Supplemental/Songti.ttc',
+            ).readAsBytes().then((b) => ByteData.sublistView(b)),
+          );
+        await textFont.load();
+        final icons = FontLoader('packages/cupertino_icons/CupertinoIcons')
+          ..addFont(
+            rootBundle.load(
+              'packages/cupertino_icons/assets/CupertinoIcons.ttf',
+            ),
+          );
+        await icons.load();
+      });
+    }
     final fixture = await tester.runAsync(() async {
       final root = await Directory.systemTemp.createTemp('ai-panel');
       final work = await WorkRepository.create(
@@ -27,16 +48,45 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(InkFlowApp(controller: c));
+    final captureKey = GlobalKey();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: captureKey,
+        child: InkFlowApp(controller: c),
+      ),
+    );
     await tester.tap(find.text('AI'));
     await tester.pumpAndSettle();
     expect(find.byType(AiPanel), findsOneWidget);
     expect(find.text('配置 AI'), findsOneWidget);
+    c.updatePanelWidths(notes: 260);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final output = Platform.environment['INKFLOW_UI_CAPTURE'];
+    if (output != null) {
+      await tester.runAsync(() async {
+        final image =
+            await (captureKey.currentContext!.findRenderObject()
+                    as RenderRepaintBoundary)
+                .toImage(pixelRatio: 1);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        await File(output).writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
+    }
+
     await tester.tap(find.text('整理思路'));
     await tester.pump();
     expect(c.ai.draft, isNotEmpty);
     expect(c.ai.turns, isEmpty);
     expect(c.session.controller.text, '原稿');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(
+      c.ai.failure,
+      isNotNull,
+      reason: 'Enter must invoke send, not insert a newline',
+    );
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     c.dispose();

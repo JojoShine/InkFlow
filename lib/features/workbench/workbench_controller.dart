@@ -58,6 +58,11 @@ class WorkbenchController extends ChangeNotifier {
 
   final Future<WorkHandle> Function(Directory) _openRepository;
   WorkLoadProgress? loadProgress;
+  String? _recoveredWorkKey;
+  bool _metadataPaused = false;
+  bool notesLoading = false, notesLoadingSlow = false;
+  Timer? _slowNotes;
+  int _notesRequest = 0;
   bool get chapterLoading =>
       loadProgress?.stage == WorkLoadStage.chapter &&
       loadProgress?.error == null;
@@ -107,6 +112,13 @@ class WorkbenchController extends ChangeNotifier {
 
   void cancelLoad() {
     _loadGeneration++;
+    ai.cancelActivation();
+    _metadataPaused = true;
+    _notesRequest++;
+    _slowNotes?.cancel();
+    notesLoading = false;
+    notesLoadingSlow = false;
+    work?.cancelPendingReads();
     _slowLoad?.cancel();
     loadProgress = null;
     if (!_disposed) notifyListeners();
@@ -118,7 +130,7 @@ class WorkbenchController extends ChangeNotifier {
 
   Future<void> loadVisibleChapters(Iterable<String> ids) async {
     final target = work;
-    if (target == null || _disposed) return;
+    if (target == null || _disposed || _metadataPaused) return;
     final missing = ids
         .where(
           (id) =>
@@ -137,20 +149,39 @@ class WorkbenchController extends ChangeNotifier {
 
   Future<void> loadMoreNotes() async {
     final target = work;
-    if (target == null) return;
+    if (target == null || notesLoading || _disposed) return;
+    final request = ++_notesRequest;
+    notesLoading = true;
+    notesLoadingSlow = false;
+    notifyListeners();
+    _slowNotes?.cancel();
+    _slowNotes = Timer(const Duration(seconds: 1), () {
+      if (!_disposed && request == _notesRequest && target == work) {
+        notesLoadingSlow = true;
+        notifyListeners();
+      }
+    });
     try {
       await target.readNextNotes();
     } catch (_) {
-      if (work == target) notice = '资料读取失败，请等待同步后重试';
+      if (!_disposed && target == work) notice = '资料读取失败，请等待同步后重试';
+    } finally {
+      if (!_disposed && request == _notesRequest && target == work) {
+        _slowNotes?.cancel();
+        notesLoading = false;
+        notesLoadingSlow = false;
+        notifyListeners();
+      }
     }
-    if (!_disposed && work == target) notifyListeners();
   }
 
   Future<void> refreshDirectory() async {
+    _metadataPaused = false;
     _metadataRequested.clear();
     final target = work;
     if (target == null) return;
     await target.reload(
+      refreshInventory: true,
       changedPaths: {
         for (final id in target.chapters.keys) 'chapters/$id.json',
         for (final id in target.notes.keys) 'notes/$id.json',
@@ -347,6 +378,7 @@ class WorkbenchController extends ChangeNotifier {
     String? chapterId,
     bool remember = true,
   }) async {
+    _metadataPaused = false;
     final generation = ++_loadGeneration;
     _retryLoad = () => openWork(
       directory,
@@ -369,8 +401,28 @@ class WorkbenchController extends ChangeNotifier {
       if (_disposed || generation != _loadGeneration) return;
       await ai.activateWork(
         workKeyForPath(next.root.path, next.manifest.workId),
+        isCurrent: () => !_disposed && generation == _loadGeneration,
       );
       if (_disposed || generation != _loadGeneration) return;
+      // A local conversation read can also be slow. Drain the old work again
+      // immediately before replacing its save session and notes controller.
+      while (true) {
+        final mutations = _libraryChanges;
+        await mutations;
+        if (_disposed || generation != _loadGeneration) return;
+        if (!await flushAll()) throw const FormatException('请先处理尚未保存的内容');
+        if (_disposed || generation != _loadGeneration) return;
+        if (!session.isDirty &&
+            notes?.isDirty != true &&
+            identical(mutations, _libraryChanges)) {
+          break;
+        }
+      }
+      work?.cancelPendingReads();
+      _notesRequest++;
+      _slowNotes?.cancel();
+      notesLoading = false;
+      notesLoadingSlow = false;
       notes?.dispose();
       work = next;
       _metadataRequested.clear();
@@ -448,7 +500,8 @@ class WorkbenchController extends ChangeNotifier {
       document = await current.readChapter(id);
     } catch (error) {
       _endLoad(generation, error);
-      rethrow;
+      if (!_disposed && generation == _loadGeneration) rethrow;
+      return;
     }
     if (_disposed || current != work || generation != _loadGeneration) return;
     if (session.isDirty && !await flushAll()) {
@@ -498,6 +551,7 @@ class WorkbenchController extends ChangeNotifier {
       );
     }
     recoveredDraft = null;
+    _recoveredWorkKey = null;
     try {
       await history.capture(
         key,
@@ -505,9 +559,22 @@ class WorkbenchController extends ChangeNotifier {
         utf8.encode(document.text),
         DateTime.now(),
       );
+      if (_disposed ||
+          current != work ||
+          generation != _loadGeneration ||
+          _activeChapterId != id) {
+        return;
+      }
       final pending = await recovery.readSession(key, id);
+      if (_disposed ||
+          current != work ||
+          generation != _loadGeneration ||
+          _activeChapterId != id) {
+        return;
+      }
       if (pending != null && pending.text != document.text) {
         recoveredDraft = pending;
+        _recoveredWorkKey = key;
       }
     } on FileSystemException {
       notice = '本地历史暂不可访问，原稿未改动';
@@ -523,6 +590,7 @@ class WorkbenchController extends ChangeNotifier {
       cancelLoad();
       return;
     }
+    _metadataPaused = false;
     final generation = ++_loadGeneration;
     if (!await flushAll() || generation != _loadGeneration) return;
     await _loadChapter(id, requestGeneration: generation);
@@ -615,6 +683,7 @@ class WorkbenchController extends ChangeNotifier {
     if (!await prepareForUpdate()) return false;
     try {
       if (beforeQuit != null && !await beforeQuit!()) {
+        notice = 'AI 对话尚未保存，请在 AI 页签重试或选择放弃本次对话保存';
         await resumeAfterUpdate();
         return false;
       }
@@ -1140,13 +1209,30 @@ class WorkbenchController extends ChangeNotifier {
   Future<void> acceptRecoveredDraft() async {
     final draft = recoveredDraft;
     if (draft == null) return;
+    final key = workKey,
+        generation = session.documentGeneration,
+        text = session.controller.text;
+    void validate() {
+      if (_disposed ||
+          workKey != key ||
+          _activeChapterId != draft.chapterId ||
+          session.documentGeneration != generation ||
+          session.controller.text != text ||
+          (_recoveredWorkKey != null && _recoveredWorkKey != key)) {
+        throw const FormatException('恢复稿所属章节或正文已变化，请重新检查');
+      }
+    }
+
+    validate();
     await history.capture(
-      workKey,
+      key,
       draft.chapterId,
-      utf8.encode(session.controller.text),
+      utf8.encode(text),
       DateTime.now(),
     );
+    validate();
     recoveredDraft = null;
+    _recoveredWorkKey = null;
     session.replaceText(draft.text, selectionOffset: draft.selectionOffset);
     notifyListeners();
   }
@@ -1198,26 +1284,43 @@ class WorkbenchController extends ChangeNotifier {
             session.controller.value.composing.isValid)) {
       return;
     }
+    final loadGeneration = _loadGeneration,
+        documentGeneration = session.documentGeneration;
+    final chapterId = _activeChapterId;
+    bool current() =>
+        !_disposed &&
+        target == work &&
+        loadGeneration == _loadGeneration &&
+        documentGeneration == session.documentGeneration &&
+        chapterId == _activeChapterId;
     try {
       if (_scanCopiesNeeded) {
         _scanCopiesNeeded = false;
         await scanSyncCopies();
       }
-      if (_disposed || target != work) return;
+      if (!current()) return;
       final paths = Set<String>.of(_changedPaths);
       _changedPaths.clear();
       await target.reload(changedPaths: paths);
-      if (_disposed || target != work) return;
-      if (_disposed || target != work || _activeChapterId == null) return;
-      final document = await target.readChapter(_activeChapterId!);
-      if (_disposed || target != work) return;
+      if (!current()) return;
+      if (!current() || chapterId == null) return;
+      final document = await target.readChapter(chapterId);
+      if (!current()) return;
       if (document.version != session.baseVersion) {
         if (session.isDirty) {
           notice = '检测到外部修改，本机草稿已保留；保存时将保留双方版本';
         } else {
           final selection = session.controller.selection.extentOffset;
-          await _loadChapter(document.record.id);
-          if (_disposed || target != work) return;
+          await _loadChapter(
+            document.record.id,
+            requestGeneration: loadGeneration,
+          );
+          if (_disposed ||
+              target != work ||
+              _loadGeneration != loadGeneration ||
+              _activeChapterId != chapterId) {
+            return;
+          }
           session.controller.selection = TextSelection.collapsed(
             offset: selection.clamp(0, document.text.length),
           );
@@ -1226,11 +1329,11 @@ class WorkbenchController extends ChangeNotifier {
       }
       notifyListeners();
     } on FileSystemException {
-      if (_disposed || target != work) return;
+      if (!current()) return;
       notice = '作品目录暂不可访问，当前内容已保留';
       notifyListeners();
     } on FormatException catch (error) {
-      if (_disposed || target != work) return;
+      if (!current()) return;
       notice = error.message;
       notifyListeners();
     }
@@ -1240,7 +1343,9 @@ class WorkbenchController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _loadGeneration++;
+    work?.cancelPendingReads();
     _slowLoad?.cancel();
+    _slowNotes?.cancel();
     _countTimer?.cancel();
     _preferenceTimer?.cancel();
     _watchTimer?.cancel();

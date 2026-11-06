@@ -148,7 +148,7 @@ class NotesController extends ChangeNotifier {
     var restored = NoteRecord.decode(bytes);
     if (restored.id != id) throw const FormatException('历史记录不属于此资料');
     if (restored.chapterId != null &&
-        !work.chapters.containsKey(restored.chapterId)) {
+        !work.manifest.chapterIds.contains(restored.chapterId)) {
       restored = restored.copyWith(chapterId: null);
     }
     update(restored);

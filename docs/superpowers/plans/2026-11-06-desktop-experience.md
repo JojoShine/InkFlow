@@ -50,3 +50,7 @@
 - [ ] Complete the native Windows/DPI/IME, iCloud offline/loading and five-provider matrix from the spec, or list precisely which are unverified. Do not call cross-platform functionality verified from mock-only tests.
 - [ ] Record before/after timings and read counts in `docs/verification/2026-11-06-desktop-experience.md`; include build/OS, fixture size, observed limitations and reproducible commands.
 - [ ] Review final changed files against user scope, verify unrelated work remains intact, then report completed behavior and remaining real-environment checks.
+
+## 执行记录（2026-11-06）
+
+四部分核心代码已实现并完成独立审查修复。实际执行记录、测试结果、实施决定及尚未完成的 Windows/iCloud/模型服务验收见 [验证记录](../../verification/2026-11-06-desktop-experience.md)。详细子计划保留原检查清单，不能把未运行的真实环境步骤视为已通过。

@@ -10,15 +10,21 @@ import 'ai_settings_store.dart';
 import 'ai_conversation_store.dart';
 
 class AiTurn {
-  AiTurn({required this.question, this.attachment, String? id})
-    : id = id ?? newId();
+  AiTurn({
+    required this.question,
+    this.attachment,
+    this.purpose = AiPurpose.organize,
+    String? id,
+  }) : id = id ?? newId();
   final String id, question;
   final AiAttachment? attachment;
+  final AiPurpose purpose;
   String answer = '', state = 'pending';
   final DateTime createdAt = DateTime.now();
   Map<String, dynamic> toJson() => {
     'id': id,
     'question': question,
+    'purpose': purpose.name,
     'attachment': attachment?.toJson(),
     'answer': answer,
     'state': state,
@@ -27,6 +33,7 @@ class AiTurn {
   factory AiTurn.fromJson(Map<String, dynamic> j) {
     final turn = AiTurn(
       question: j['question'] as String,
+      purpose: AiPurpose.values.byName(j['purpose'] as String? ?? 'organize'),
       id: j['id'] as String?,
       attachment: j['attachment'] == null
           ? null
@@ -66,10 +73,12 @@ class AiController extends ChangeNotifier {
   String? _boundConnection;
   Map<String, dynamic>? _boundSettings;
   int _generation = 0;
+  int _activationGeneration = 0;
+  bool loadingConversation = false;
   AiRequest? _request;
   StreamSubscription<AiEvent>? _subscription;
   Timer? _saveTimer;
-  bool get busy => _request != null || _sending;
+  bool get busy => _request != null || _sending || loadingConversation;
   bool _sending = false;
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -110,37 +119,79 @@ class AiController extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> activateWork(String? key) async {
-    if (key == workKey) return;
+  void cancelActivation() {
+    _activationGeneration++;
+    if (loadingConversation) {
+      _generation++;
+      loadingConversation = false;
+      _notify();
+    }
+  }
+
+  Future<void> activateWork(String? key, {bool Function()? isCurrent}) async {
+    if (key == workKey) {
+      cancelActivation();
+      return;
+    }
+    final activation = ++_activationGeneration;
+    bool current() =>
+        !_disposed &&
+        activation == _activationGeneration &&
+        (isCurrent?.call() ?? true);
     await stop();
+    if (!current()) return;
     if (saveFailed && !_discardSave) {
       throw const FormatException('当前对话尚未保存，请重试后再切换作品');
     }
     final generation = ++_generation;
-    workKey = key;
-    turns.clear();
-    draft = '';
-    attachment = null;
-    failure = null;
-    _boundConnection = null;
-    _boundSettings = null;
-    _storageBlocked = false;
+    loadingConversation = true;
+    _notify();
+    final nextTurns = <AiTurn>[];
+    String? nextConnection, nextFailure;
+    Map<String, dynamic>? nextSettings;
+    var blocked = false;
     if (key != null) {
       try {
         final value = await conversationStore.load(key);
-        if (generation != _generation || _disposed) return;
+        if (!current() || generation != _generation) {
+          if (activation == _activationGeneration) {
+            loadingConversation = false;
+            _notify();
+          }
+          return;
+        }
         if (value != null) {
           for (final t in value['turns'] as List) {
-            turns.add(AiTurn.fromJson(Map<String, dynamic>.from(t as Map)));
+            nextTurns.add(AiTurn.fromJson(Map<String, dynamic>.from(t as Map)));
           }
-          _boundConnection = value['connectionId'] as String?;
-          _boundSettings = value['connection'] as Map<String, dynamic>?;
+          nextConnection = value['connectionId'] as String?;
+          nextSettings = value['connection'] as Map<String, dynamic>?;
         }
       } catch (_) {
-        _storageBlocked = true;
-        failure = '本机对话读取失败，原文件已保留。请检查文件后重试';
+        if (!current() || generation != _generation) return;
+        nextTurns.clear();
+        blocked = true;
+        nextFailure = '本机对话读取失败，原文件已保留。请检查文件后重试';
       }
     }
+    if (!current() || generation != _generation) {
+      if (activation == _activationGeneration) {
+        loadingConversation = false;
+        _notify();
+      }
+      return;
+    }
+    workKey = key;
+    turns
+      ..clear()
+      ..addAll(nextTurns);
+    draft = '';
+    attachment = null;
+    failure = nextFailure;
+    _boundConnection = nextConnection;
+    _boundSettings = nextSettings;
+    _storageBlocked = blocked;
+    loadingConversation = false;
     _notify();
   }
 
@@ -149,6 +200,7 @@ class AiController extends ChangeNotifier {
       settings != null &&
       _boundConnection != settings!.connectionId;
   Future<void> newConversation() async {
+    if (loadingConversation) throw const FormatException('本机对话正在加载，请稍后再试');
     if (_storageBlocked) throw const FormatException('请先处理本机对话文件读取失败，原文件已保留');
     await stop();
     _generation++;
@@ -166,6 +218,16 @@ class AiController extends ChangeNotifier {
     String question, {
     AiPurpose? purpose,
     AiAttachment? attachment,
+  }) => _send(
+    question,
+    purpose: purpose,
+    attachment: attachment ?? this.attachment,
+  );
+  Future<void> _send(
+    String question, {
+    AiPurpose? purpose,
+    AiAttachment? attachment,
+    AiTurn? replacing,
   }) async {
     if (busy) return;
     final config = settings, key = workKey;
@@ -184,7 +246,13 @@ class AiController extends ChangeNotifier {
       return;
     }
     final selectedPurpose = purpose ?? this.purpose,
-        selectedAttachment = attachment ?? this.attachment;
+        selectedAttachment = attachment;
+    if (selectedAttachment != null && selectedAttachment.workKey != key) {
+      failure = '附加内容属于其他作品，请重新附加';
+      _notify();
+      return;
+    }
+
     if (selectedPurpose != AiPurpose.organize &&
         selectedAttachment == null &&
         question.trim() == selectedPurpose.draft) {
@@ -217,25 +285,45 @@ class AiController extends ChangeNotifier {
       if (apiKey == null || apiKey.isEmpty) {
         throw const FormatException('请先配置此服务的 API Key');
       }
-      final turn = AiTurn(question: question, attachment: selectedAttachment);
-      turns.add(turn);
+      final turn = AiTurn(
+        question: question,
+        attachment: selectedAttachment,
+        id: replacing?.id,
+        purpose: selectedPurpose,
+      );
+      final replacedIndex = replacing == null ? -1 : turns.indexOf(replacing);
+      if (replacedIndex >= 0) {
+        turn.answer = replacing!.answer;
+        turns[replacedIndex] = turn;
+      } else {
+        turns.add(turn);
+      }
       _boundConnection = config.connectionId;
       _boundSettings = config.toJson();
       if (!await _persist()) {
-        turn.state = 'failed';
+        if (replacedIndex >= 0) {
+          turns[replacedIndex] = replacing!;
+        } else {
+          turn.state = 'failed';
+        }
         return;
       }
       if (generation != _generation || _disposed) return;
-      draft = '';
-      this.attachment = null;
+      if (replacing == null) {
+        draft = '';
+        this.attachment = null;
+      }
       final request = client.start(config, apiKey, messages);
       _request = request;
       turn.state = 'receiving';
+      bool newText = false;
       _subscription = request.events.listen(
         (event) {
           if (_disposed || generation != _generation) return;
           switch (event) {
             case AiTextDelta(:final text):
+              if (replacing != null && !newText) turn.answer = '';
+              newText = true;
               turn.answer += text;
               processing = false;
               _scheduleSave();
@@ -271,11 +359,11 @@ class AiController extends ChangeNotifier {
         },
       );
     } on FormatException catch (error) {
-      failure = error.message.toString();
+      if (generation == _generation) failure = error.message.toString();
     } catch (_) {
-      failure = '无法读取系统凭据或保存对话，请检查配置后重试';
+      if (generation == _generation) failure = '无法读取系统凭据或保存对话，请检查配置后重试';
     } finally {
-      _sending = false;
+      if (generation == _generation) _sending = false;
       _notify();
     }
   }
@@ -325,11 +413,17 @@ class AiController extends ChangeNotifier {
     if (turns.isEmpty || busy) return;
     final old = turns.last;
     if (old.state == 'completed') return;
-    turns.removeLast();
-    await send(old.question, attachment: old.attachment);
+    await _send(
+      old.question,
+      purpose: old.purpose,
+      attachment: old.attachment,
+      replacing: old,
+    );
   }
 
-  Future<void> stop() async {
+  Future<void> stop() => _stop(persist: true);
+  Future<void> _stop({required bool persist}) async {
+    if (loadingConversation) return;
     _generation++;
     _saveTimer?.cancel();
     _saveTimer = null;
@@ -344,7 +438,7 @@ class AiController extends ChangeNotifier {
         (turns.last.state == 'receiving' || turns.last.state == 'pending')) {
       turns.last.state = 'stopped';
     }
-    if (workKey != null && turns.isNotEmpty) await _persist();
+    if (persist && workKey != null && turns.isNotEmpty) await _persist();
     _notify();
   }
 
@@ -353,7 +447,14 @@ class AiController extends ChangeNotifier {
   }
 
   Future<bool> prepareToQuit() async {
-    if (_discardSave) return true;
+    if (loadingConversation) {
+      cancelActivation();
+      return _discardSave || !saveFailed;
+    }
+    if (_discardSave) {
+      await _stop(persist: false);
+      return true;
+    }
     await stop();
     await conversationStore.flush();
     return !saveFailed;
@@ -362,6 +463,7 @@ class AiController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _activationGeneration++;
     _generation++;
     _saveTimer?.cancel();
     unawaited(_subscription?.cancel() ?? Future.value());

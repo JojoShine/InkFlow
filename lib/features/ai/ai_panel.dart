@@ -49,6 +49,11 @@ class _AiPanelState extends State<AiPanel> {
 
   Future<void> _send() async {
     if (ai.busy) return;
+    if (ai.workKey != widget.workbench.workKey) {
+      ai.failure = '正在切换作品，请加载完成后发送';
+      setState(() {});
+      return;
+    }
     if (ai.needsNewConversation) {
       if (!await confirmAction(
         context,
@@ -88,13 +93,7 @@ class _AiPanelState extends State<AiPanel> {
   @override
   Widget build(BuildContext context) {
     final colors = InkPalette.of(context), attachment = ai.attachment;
-    final stale =
-        attachment != null &&
-        (attachment.chapterId != widget.workbench.activeChapterId ||
-            attachment.documentGeneration !=
-                widget.workbench.session.documentGeneration ||
-            (attachment.source == AiContextSource.chapter &&
-                attachment.text != widget.workbench.session.controller.text));
+    final stale = attachment?.isStale(widget.workbench) ?? false;
     return Container(
       width: widget.width,
       decoration: BoxDecoration(
@@ -105,6 +104,11 @@ class _AiPanelState extends State<AiPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           CreativePanelTabs(controller: widget.workbench),
+          if (ai.loadingConversation)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              child: Text('正在读取本机对话…', style: TextStyle(fontSize: 12)),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 8, 6, 4),
             child: Row(
@@ -404,8 +408,18 @@ class _AiPanelState extends State<AiPanel> {
                   ),
                 ),
                 TextButton(
-                  onPressed: ai.busy ? ai.stop : _send,
-                  child: Text(ai.busy ? '停止' : '发送'),
+                  onPressed: ai.loadingConversation
+                      ? null
+                      : ai.busy
+                      ? ai.stop
+                      : _send,
+                  child: Text(
+                    ai.loadingConversation
+                        ? '读取中'
+                        : ai.busy
+                        ? '停止'
+                        : '发送',
+                  ),
                 ),
               ],
             ),
