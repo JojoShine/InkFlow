@@ -115,6 +115,8 @@ String _preview(List<int> bytes, bool note) {
 }
 
 Future<void> showTrash(BuildContext context, WorkbenchController c) async {
+  await c.work!.ensureAllMetadata();
+  if (!context.mounted) return;
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => StatefulBuilder(

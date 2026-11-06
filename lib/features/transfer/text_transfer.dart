@@ -16,6 +16,7 @@ class TextTransfer {
   static Future<List<int>> exportChapter(WorkHandle work, String id) async =>
       utf8.encode((await work.readChapter(id)).text);
   static Future<List<int>> exportWork(WorkHandle work) async {
+    await work.ensureAllMetadata();
     final chapters = <String>[];
     for (final id in work.manifest.chapterIds) {
       if (work.chapters[id]!.isDeleted) continue;

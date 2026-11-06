@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../app/ui_actions.dart';
 import '../appearance/theme_presets.dart';
@@ -9,6 +10,7 @@ import '../../app/ink_icons.dart';
 typedef _DirectoryEntry = ({
   WorkVolume volume,
   ChapterRecord? chapter,
+  String? chapterId,
   bool isHeader,
 });
 
@@ -165,16 +167,31 @@ class _ChapterSidebarState extends State<ChapterSidebar> {
     final work = c.work!;
     final entries = <_DirectoryEntry>[];
     for (final volume in work.manifest.volumes) {
-      entries.add((volume: volume, chapter: null, isHeader: true));
+      entries.add((
+        volume: volume,
+        chapter: null,
+        chapterId: null,
+        isHeader: true,
+      ));
       if (_collapsed.contains(volume.id)) continue;
-      final chapters = c.liveChapters
-          .where((chapter) => work.volumeForChapter(chapter.id) == volume.id)
+      final chapters = c.directoryChapterIds
+          .where((id) => work.volumeForChapter(id) == volume.id)
           .toList();
       if (chapters.isEmpty) {
-        entries.add((volume: volume, chapter: null, isHeader: false));
+        entries.add((
+          volume: volume,
+          chapter: null,
+          chapterId: null,
+          isHeader: false,
+        ));
       }
       for (final chapter in chapters) {
-        entries.add((volume: volume, chapter: chapter, isHeader: false));
+        entries.add((
+          volume: volume,
+          chapter: work.chapters[chapter],
+          chapterId: chapter,
+          isHeader: false,
+        ));
       }
     }
     return Container(
@@ -213,6 +230,11 @@ class _ChapterSidebarState extends State<ChapterSidebar> {
                 const Expanded(
                   child: Text('目录', style: TextStyle(fontSize: 16)),
                 ),
+                IconButton(
+                  tooltip: '刷新目录',
+                  icon: const Icon(InkIcons.sync, size: 16),
+                  onPressed: () => uiAction(context, c.refreshDirectory),
+                ),
                 PopupMenuButton<String>(
                   tooltip: '新建卷或章节',
                   onSelected: (action) => action == 'volume'
@@ -247,6 +269,31 @@ class _ChapterSidebarState extends State<ChapterSidebar> {
               itemBuilder: (context, index) {
                 final entry = entries[index];
                 if (entry.isHeader) return _volumeRow(entry.volume);
+                if (entry.chapterId != null && entry.chapter == null) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted)
+                      unawaited(
+                        c.loadVisibleChapters(
+                          entries
+                              .skip(index)
+                              .take(32)
+                              .map((e) => e.chapterId)
+                              .whereType<String>(),
+                        ),
+                      );
+                  });
+                  return ListTile(
+                    key: ValueKey('pending-${entry.chapterId}'),
+                    title: const Text(
+                      '章节信息待加载',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    onTap: () => uiAction(
+                      context,
+                      () => c.selectChapter(entry.chapterId!),
+                    ),
+                  );
+                }
                 if (entry.chapter == null) {
                   return Padding(
                     key: ValueKey('empty-${entry.volume.id}'),

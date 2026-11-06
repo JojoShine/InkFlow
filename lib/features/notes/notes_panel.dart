@@ -92,6 +92,24 @@ class _NotesPanelState extends State<NotesPanel> {
               ],
             ),
           ),
+          if (!c.work!.notesComplete && c.work!.isLazy)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '已检查 ${c.work!.notesChecked} / ${c.work!.notesTotal ?? '…'} 份资料',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: c.loadMoreNotes,
+                    child: const Text('继续加载资料'),
+                  ),
+                ],
+              ),
+            ),
           if (selected != null && !selected.isDeleted)
             Expanded(
               child: _NoteForm(
@@ -140,7 +158,9 @@ class _NotesPanelState extends State<NotesPanel> {
       return Padding(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
         child: Text(
-          '还没有${_noteLabels[widget.kind]}。\n点击“新建${_noteLabels[widget.kind]}”开始记录。',
+          c.work!.isLazy && !c.work!.notesComplete
+              ? '当前批次没有${_noteLabels[widget.kind]}，可继续加载资料。'
+              : '还没有${_noteLabels[widget.kind]}。\n点击“新建${_noteLabels[widget.kind]}”开始记录。',
           style: TextStyle(color: colors.muted, fontSize: 14, height: 1.9),
         ),
       );

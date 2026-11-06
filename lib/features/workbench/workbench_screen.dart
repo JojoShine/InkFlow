@@ -43,6 +43,42 @@ class WorkbenchScreen extends StatelessWidget {
                   ignoring: c.busy,
                   child: _Toolbar(controller: c),
                 ),
+                if (c.loadProgress case final progress?)
+                  Material(
+                    color: colors.paper,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          if (progress.error == null)
+                            const Icon(InkIcons.sync, size: 14),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              progress.error ??
+                                  '${progress.label}${progress.slow ? ' · 文件读取较慢，云盘可能需要下载，请保持联网或稍后重试' : ''}',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                          if (progress.error != null)
+                            TextButton(
+                              onPressed: () => uiAction(context, c.retryLoad),
+                              child: const Text('重试'),
+                            ),
+                          TextButton(
+                            onPressed: () {
+                              c.cancelLoad();
+                              if (c.work == null) c.showLibrary();
+                            },
+                            child: const Text('取消加载'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 if (c.notice != null)
                   Container(
                     color: colors.selection,
@@ -458,7 +494,9 @@ class _StatusBar extends StatelessWidget {
           return Row(
             children: [
               Tooltip(
-                message: '全书 ${formatNumber(c.totalWords)} 字',
+                message: c.totalWordsComplete
+                    ? '全书 ${formatNumber(c.totalWords)} 字'
+                    : '已加载章节 ${formatNumber(c.totalWords)} 字 · 全书未统计',
                 child: Text(
                   '${formatNumber(c.chapterWords)} 字',
                   style: TextStyle(color: colors.muted, fontSize: 12),

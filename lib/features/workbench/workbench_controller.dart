@@ -25,17 +25,127 @@ import '../works/work_models.dart';
 import '../works/work_repository.dart';
 import '../works/work_codec.dart';
 import '../typing_sound/typing_sound_settings.dart';
+import 'work_load_progress.dart';
 
 class WorkbenchController extends ChangeNotifier {
-  WorkbenchController(this.dataRoot, {DesktopServices? services})
-    : services = services ?? DesktopServices(),
-      preferencesStore = PreferencesStore(dataRoot),
-      history = HistoryStore(dataRoot),
-      recovery = RecoveryStore(dataRoot) {
+  WorkbenchController(
+    this.dataRoot, {
+    DesktopServices? services,
+    Future<WorkHandle> Function(Directory)? openRepository,
+  }) : _openRepository =
+           openRepository ?? ((root) => WorkRepository.open(root, lazy: true)),
+       services = services ?? DesktopServices(),
+       preferencesStore = PreferencesStore(dataRoot),
+       history = HistoryStore(dataRoot),
+       recovery = RecoveryStore(dataRoot) {
     session.addListener(_sessionChanged);
   }
 
   final Directory dataRoot;
+  final Future<WorkHandle> Function(Directory) _openRepository;
+  WorkLoadProgress? loadProgress;
+  bool get chapterLoading =>
+      loadProgress?.stage == WorkLoadStage.chapter &&
+      loadProgress?.error == null;
+  bool get totalWordsComplete =>
+      work != null &&
+      work!.manifest.chapterIds.every(
+        (id) =>
+            work!.chapters[id]?.isDeleted == true || _counts.containsKey(id),
+      );
+  List<String> get directoryChapterIds =>
+      work?.manifest.chapterIds
+          .where((id) => work!.chapters[id]?.isDeleted != true)
+          .toList() ??
+      [];
+  int _loadGeneration = 0;
+  Timer? _slowLoad;
+  Future<void> Function()? _retryLoad;
+  final _metadataRequested = <String>{};
+  final _changedPaths = <String>{};
+  Future<void>? _externalCheck;
+
+  void _beginLoad(WorkLoadStage stage, int generation, {String? targetId}) {
+    _slowLoad?.cancel();
+    loadProgress = WorkLoadProgress(stage, targetId: targetId);
+    if (!_disposed) notifyListeners();
+    _slowLoad = Timer(const Duration(seconds: 1), () {
+      if (!_disposed && generation == _loadGeneration && loadProgress != null) {
+        loadProgress = WorkLoadProgress(stage, targetId: targetId, slow: true);
+        notifyListeners();
+      }
+    });
+  }
+
+  void _endLoad(int generation, [Object? error]) {
+    if (_disposed || generation != _loadGeneration) return;
+    _slowLoad?.cancel();
+    loadProgress = error == null
+        ? null
+        : WorkLoadProgress(
+            loadProgress?.stage ?? WorkLoadStage.directory,
+            error: error is FormatException
+                ? error.message
+                : '文件读取失败，请检查同步状态后重试',
+          );
+    notifyListeners();
+  }
+
+  void cancelLoad() {
+    _loadGeneration++;
+    _slowLoad?.cancel();
+    loadProgress = null;
+    if (!_disposed) notifyListeners();
+  }
+
+  Future<void> retryLoad() async {
+    await _retryLoad?.call();
+  }
+
+  Future<void> loadVisibleChapters(Iterable<String> ids) async {
+    final target = work;
+    if (target == null || _disposed) return;
+    final missing = ids
+        .where(
+          (id) =>
+              !target.chapters.containsKey(id) && _metadataRequested.add(id),
+        )
+        .take(32)
+        .toList();
+    if (missing.isEmpty) return;
+    try {
+      await target.loadChapterMetadata(missing);
+    } catch (_) {
+      if (work == target) notice = '部分章节信息暂不可用，可刷新目录重试';
+    }
+    if (!_disposed && work == target) notifyListeners();
+  }
+
+  Future<void> loadMoreNotes() async {
+    final target = work;
+    if (target == null) return;
+    try {
+      await target.readNextNotes();
+    } catch (_) {
+      if (work == target) notice = '资料读取失败，请等待同步后重试';
+    }
+    if (!_disposed && work == target) notifyListeners();
+  }
+
+  Future<void> refreshDirectory() async {
+    _metadataRequested.clear();
+    final target = work;
+    if (target == null) return;
+    await target.reload(
+      changedPaths: {
+        for (final id in target.chapters.keys) 'chapters/$id.json',
+        for (final id in target.notes.keys) 'notes/$id.json',
+      },
+    );
+    await checkExternal();
+    if (!_disposed) notifyListeners();
+  }
+
   final DesktopServices services;
   final PreferencesStore preferencesStore;
   final HistoryStore history;
@@ -60,7 +170,6 @@ class WorkbenchController extends ChangeNotifier {
   int chapterWords = 0;
   final Map<String, int> _counts = {};
   final Map<String, int> _countGenerations = {};
-  final Set<String> _changedCounts = {};
   Future<void>? _syncScan;
   bool hasConflicts = false;
   bool _scanCopiesNeeded = false;
@@ -97,7 +206,8 @@ class WorkbenchController extends ChangeNotifier {
   List<ChapterRecord> get liveChapters => work == null
       ? []
       : work!.manifest.chapterIds
-            .map((id) => work!.chapters[id]!)
+            .map((id) => work!.chapters[id])
+            .whereType<ChapterRecord>()
             .where((chapter) => !chapter.isDeleted)
             .toList();
   int get totalWords => liveChapters.fold(
@@ -209,13 +319,11 @@ class WorkbenchController extends ChangeNotifier {
     String bookmark = '',
     String? chapterId,
     bool remember = true,
-  }) => _queueLibraryChange(
-    () => _openWork(
-      directory,
-      bookmark: bookmark,
-      chapterId: chapterId,
-      remember: remember,
-    ),
+  }) => _openWork(
+    directory,
+    bookmark: bookmark,
+    chapterId: chapterId,
+    remember: remember,
   );
 
   Future<void> _openWork(
@@ -224,86 +332,107 @@ class WorkbenchController extends ChangeNotifier {
     String? chapterId,
     bool remember = true,
   }) async {
-    if (!await flushAll()) throw const FormatException('请先处理尚未保存的内容');
-    final next = await WorkRepository.open(directory);
-    await _watch?.cancel();
-    notes?.dispose();
-    work = next;
-    if (next.issues.isNotEmpty) notice = next.issues.join('；');
-    _bookmark = bookmark;
-    _remember = remember;
-    _activeChapterId = null;
-    _selectedVolumeId = null;
-    _counts.clear();
-    _countGenerations.clear();
-    _changedCounts.clear();
-    notes = NotesController(next, history, workKey)
-      ..addListener(notifyListeners);
-    libraryVisible = false;
-    await scanSyncCopies();
-    final live = liveChapters;
-    final id = live.any((record) => record.id == chapterId)
-        ? chapterId
-        : live.firstOrNull?.id;
-    if (id != null) await _loadChapter(id);
-    _watch = next.watchChanges().listen(
-      (event) {
-        if (event.path.replaceAll('\\', '/').contains('/.inkflow/')) return;
-        final match = RegExp(
-          r'^([a-f0-9]{32})\.txt$',
-        ).firstMatch(p.basename(event.path));
-        if (match != null && match[1] != _activeChapterId) {
-          _changedCounts.add(match[1]!);
-        }
-        final name = p.basename(event.path);
-        if (name != 'work.json' &&
-            !RegExp(r'^[a-f0-9]{32}\.(txt|json)$').hasMatch(name)) {
-          _scanCopiesNeeded = true;
-        }
-        _watchTimer?.cancel();
-        _watchTimer = Timer(const Duration(milliseconds: 300), () {
-          unawaited(checkExternal());
-        });
-      },
-      onError: (Object error) {
-        notice = '作品目录暂不可访问，当前内容已保留';
-        notifyListeners();
-      },
+    final generation = ++_loadGeneration;
+    _retryLoad = () => openWork(
+      directory,
+      bookmark: bookmark,
+      chapterId: chapterId,
+      remember: remember,
     );
-    _historyTimer?.cancel();
-    _historyTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      unawaited(_snapshotAll());
-    });
-    await rememberPosition();
-    unawaited(_indexWords(next));
-    notifyListeners();
-  }
-
-  Future<void> _indexWords(WorkHandle target) async {
-    for (final chapter in target.chapters.values.where(
-      (record) => !record.isDeleted,
-    )) {
-      try {
-        final generation = _countGenerations[chapter.id] ?? 0;
-        final document = await target.readChapter(chapter.id);
-        final count = await compute(countWords, document.text);
-        if (_disposed || target != work) return;
-        if (generation == (_countGenerations[chapter.id] ?? 0)) {
-          _counts[chapter.id] = count;
+    _beginLoad(WorkLoadStage.directory, generation);
+    try {
+      await _libraryChanges;
+      if (_disposed || generation != _loadGeneration) return;
+      if (!await flushAll()) throw const FormatException('请先处理尚未保存的内容');
+      final next = await _openRepository(directory);
+      if (_disposed || generation != _loadGeneration) return;
+      await _watch?.cancel();
+      if (_disposed || generation != _loadGeneration) return;
+      notes?.dispose();
+      work = next;
+      _metadataRequested.clear();
+      if (next.issues.isNotEmpty) notice = next.issues.join('；');
+      _bookmark = bookmark;
+      _remember = remember;
+      _activeChapterId = null;
+      _selectedVolumeId = null;
+      _counts.clear();
+      _countGenerations.clear();
+      notes = NotesController(next, history, workKey)
+        ..addListener(notifyListeners);
+      libraryVisible = false;
+      notifyListeners();
+      final ids = next.manifest.chapterIds;
+      final candidates = [
+        if (ids.contains(chapterId)) chapterId!,
+        ...ids.where((id) => id != chapterId),
+      ];
+      for (final id in candidates) {
+        await next.loadChapterMetadata([id]);
+        if (_disposed || generation != _loadGeneration) return;
+        if (!next.chapters[id]!.isDeleted) {
+          await _loadChapter(id, requestGeneration: generation);
+          break;
         }
-      } on FileSystemException {
-        break;
-      } on FormatException {
-        break;
       }
+      if (_disposed || generation != _loadGeneration) return;
+      _watch = next.watchChanges().listen(
+        (event) {
+          final relative = p
+              .relative(event.path, from: next.root.path)
+              .replaceAll('\\', '/');
+          if (relative.startsWith('.inkflow/')) return;
+          _changedPaths.add(relative);
+          final match = RegExp(
+            r'^chapters/([a-f0-9]{32})\.txt$',
+          ).firstMatch(relative);
+          if (match != null && match[1] != _activeChapterId) {
+            _counts.remove(match[1]);
+          }
+          _watchTimer?.cancel();
+          _watchTimer = Timer(const Duration(milliseconds: 300), () {
+            unawaited(checkExternal());
+          });
+        },
+        onError: (Object error) {
+          if (!_disposed) {
+            notice = '作品目录暂不可访问，当前内容已保留';
+            notifyListeners();
+          }
+        },
+      );
+      _historyTimer?.cancel();
+      _historyTimer = Timer.periodic(
+        const Duration(minutes: 5),
+        (_) => unawaited(_snapshotAll()),
+      );
+      await rememberPosition();
+      _endLoad(generation);
+      unawaited(loadMoreNotes());
+    } catch (error) {
+      _endLoad(generation, error);
+      if (!_disposed && generation == _loadGeneration) rethrow;
     }
-    if (!_disposed) notifyListeners();
   }
 
-  Future<void> _loadChapter(String id) async {
+  Future<void> _loadChapter(String id, {int? requestGeneration}) async {
+    final generation = requestGeneration ?? ++_loadGeneration;
+    _retryLoad = () => selectChapter(id);
+    _beginLoad(WorkLoadStage.chapter, generation, targetId: id);
     final current = work!;
-    final document = await current.readChapter(id);
-    if (_disposed || current != work) return;
+    ChapterDocument document;
+    try {
+      document = await current.readChapter(id);
+    } catch (error) {
+      _endLoad(generation, error);
+      rethrow;
+    }
+    if (_disposed || current != work || generation != _loadGeneration) return;
+    if (session.isDirty && !await flushAll()) {
+      _endLoad(generation);
+      return;
+    }
+    if (_disposed || current != work || generation != _loadGeneration) return;
     _activeChapterId = id;
     _selectedVolumeId = work!.volumeForChapter(id);
     final key = workKey;
@@ -332,9 +461,10 @@ class WorkbenchController extends ChangeNotifier {
       return saved;
     }, statisticsKey: '$key/$id');
     chapterWords = await compute(countWords, document.text);
-    if (_disposed || current != work) return;
+    if (_disposed || current != work || generation != _loadGeneration) return;
     _counts[id] = chapterWords;
     _observedText = document.text;
+    _endLoad(generation);
     final recent = preferences.recentWorks
         .where((entry) => entry.path == current.root.path)
         .firstOrNull;
@@ -366,9 +496,13 @@ class WorkbenchController extends ChangeNotifier {
   }
 
   Future<void> selectChapter(String id) async {
-    if (id == _activeChapterId) return;
-    if (!await flushAll()) return;
-    await _loadChapter(id);
+    if (id == _activeChapterId) {
+      cancelLoad();
+      return;
+    }
+    final generation = ++_loadGeneration;
+    if (!await flushAll() || generation != _loadGeneration) return;
+    await _loadChapter(id, requestGeneration: generation);
     await rememberPosition();
     notifyListeners();
   }
@@ -993,7 +1127,18 @@ class WorkbenchController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> checkExternal() async {
+  Future<void> checkExternal() =>
+      _externalCheck ??= _checkExternal().whenComplete(() {
+        _externalCheck = null;
+        if (_changedPaths.isNotEmpty && !_disposed && !busy) {
+          _watchTimer?.cancel();
+          _watchTimer = Timer(
+            const Duration(milliseconds: 300),
+            () => unawaited(checkExternal()),
+          );
+        }
+      });
+  Future<void> _checkExternal() async {
     final target = work;
     if (_disposed ||
         target == null ||
@@ -1010,20 +1155,10 @@ class WorkbenchController extends ChangeNotifier {
         await scanSyncCopies();
       }
       if (_disposed || target != work) return;
-      await target.reload();
+      final paths = Set<String>.of(_changedPaths);
+      _changedPaths.clear();
+      await target.reload(changedPaths: paths);
       if (_disposed || target != work) return;
-      for (final id in {
-        ..._changedCounts,
-        ...target.manifest.chapterIds.where((id) => !_counts.containsKey(id)),
-      }) {
-        if (id == _activeChapterId || target.chapters[id]?.isDeleted != false) {
-          continue;
-        }
-        final document = await target.readChapter(id);
-        if (_disposed || target != work) return;
-        _counts[id] = await compute(countWords, document.text);
-        _changedCounts.remove(id);
-      }
       if (_disposed || target != work || _activeChapterId == null) return;
       final document = await target.readChapter(_activeChapterId!);
       if (_disposed || target != work) return;
@@ -1055,6 +1190,8 @@ class WorkbenchController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _loadGeneration++;
+    _slowLoad?.cancel();
     _countTimer?.cancel();
     _preferenceTimer?.cancel();
     _watchTimer?.cancel();
