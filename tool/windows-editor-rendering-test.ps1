@@ -9,6 +9,7 @@ $out = Join-Path $PWD 'render-probe'
 $work = Join-Path $out '中文作品'
 New-Item -ItemType Directory -Force (Join-Path $work 'chapters'), $root | Out-Null
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
 Add-Type @'
 using System;
 using System.Text;
@@ -168,20 +169,35 @@ foreach ($theme in @('paper','forest','night')) {
   $expected = switch ($theme) { 'paper' { @(255,253,248) }; 'forest' { @(248,250,243) }; 'night' { @(45,41,37) } }
   $process = Start-Process $Executable -WorkingDirectory (Split-Path $Executable) -PassThru
   try {
-    Start-Sleep -Seconds 12
-    $process.Refresh(); $window=$process.MainWindowHandle
-    if ($window -eq 0) { throw 'No manuscript window.' }
+    # Native controls are created after preferences and the work have loaded.
+    # Wait for that condition rather than assuming the hosted desktop is ready.
+    $deadline = [DateTime]::UtcNow.AddSeconds(45)
+    do {
+      Start-Sleep -Milliseconds 250
+      $process.Refresh(); $window=$process.MainWindowHandle
+      $editors=[Collections.Generic.List[IntPtr]]::new()
+      if ($window -ne 0) {
+        [ManuscriptProbe]::EnumChildWindows($window, {
+          param($handle,$unused)
+          $class=[Text.StringBuilder]::new(256)
+          [ManuscriptProbe]::GetClassName($handle,$class,256) | Out-Null
+          if ($class.ToString() -like 'RICHEDIT*') { $editors.Add($handle) }
+          return $true
+        },[IntPtr]::Zero) | Out-Null
+      }
+    } while ($editors.Count -eq 0 -and !$process.HasExited -and [DateTime]::UtcNow -lt $deadline)
+    if ($window -eq 0 -or $editors.Count -ne 1) {
+      $screen = [Windows.Forms.Screen]::PrimaryScreen.Bounds
+      $bitmap = [Drawing.Bitmap]::new($screen.Width,$screen.Height)
+      $graphics = [Drawing.Graphics]::FromImage($bitmap)
+      try {
+        $graphics.CopyFromScreen($screen.Left,$screen.Top,0,0,$bitmap.Size)
+        $bitmap.Save((Join-Path $out "$theme-startup-failure.png"))
+      } finally { $graphics.Dispose(); $bitmap.Dispose() }
+      throw "Expected one native manuscript editor for $theme; found $($editors.Count); exited=$($process.HasExited)."
+    }
     [ManuscriptProbe]::SetForegroundWindow($window) | Out-Null
     Start-Sleep -Seconds 2
-    $editors=[Collections.Generic.List[IntPtr]]::new()
-    [ManuscriptProbe]::EnumChildWindows($window, {
-      param($handle,$unused)
-      $class=[Text.StringBuilder]::new(256)
-      [ManuscriptProbe]::GetClassName($handle,$class,256) | Out-Null
-      if ($class.ToString() -like 'RICHEDIT*') { $editors.Add($handle) }
-      return $true
-    },[IntPtr]::Zero) | Out-Null
-    if ($editors.Count -ne 1) { throw 'Expected one native manuscript editor.' }
     $editor=$editors[0]
     if ((Read-Editor $editor) -ne $text) { throw 'Loaded manuscript differs from fixture.' }
     Assert-Paragraph $editor $process.Id
@@ -245,6 +261,7 @@ foreach ($theme in @('paper','forest','night')) {
     Write-Output "$theme preserves line spacing, paragraph spacing, indentation, plain paste and undo."
   } finally {
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    $process.WaitForExit()
     Start-Sleep -Seconds 1
   }
 }
