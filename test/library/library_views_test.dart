@@ -93,10 +93,10 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('$title 的作品操作'));
         await tester.pumpAndSettle();
-        final delete = find.widgetWithText(PopupMenuItem<String>, '删除作品');
+        final delete = find.widgetWithText(TextButton, '删除');
         expect(tester.getSize(delete).height, lessThanOrEqualTo(38));
         expect(find.text('设置封面'), findsNothing);
-        await tester.tap(find.text('编辑作品'));
+        await tester.tap(find.widgetWithText(TextButton, '编辑'));
         await waitFor(
           tester,
           () => find

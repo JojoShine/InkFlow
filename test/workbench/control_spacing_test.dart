@@ -63,7 +63,7 @@ void main() {
   );
 
   testWidgets(
-    'work popup clears the continue action at regular and narrow window widths',
+    'inline work actions leave the continue action usable at regular and narrow widths',
     (tester) async {
       await tester.runAsync(c.showLibrary);
       tester.view.devicePixelRatio = 1;
@@ -73,9 +73,6 @@ void main() {
         tester.view.physicalSize = Size(width, 800);
         await tester.pumpWidget(InkFlowApp(controller: c));
         await tester.pumpAndSettle();
-        final action = tester.getRect(
-          find.widgetWithText(OutlinedButton, '继续写作'),
-        );
         final continueButton = find.widgetWithText(OutlinedButton, '继续写作');
         final arrow = tester.getRect(
           find.descendant(of: continueButton, matching: find.byType(Icon)),
@@ -93,18 +90,17 @@ void main() {
         final trigger = tester.getRect(find.byTooltip('春日来信 的作品操作'));
         await tester.tap(find.byTooltip('春日来信 的作品操作'));
         await tester.pumpAndSettle();
-        final item = find.widgetWithText(PopupMenuItem<String>, '删除作品');
-        final menu = tester.getRect(
-          find.ancestor(of: item, matching: find.byType(Material)).first,
-        );
+        final item = find.widgetWithText(TextButton, '删除');
+        final action = tester.getRect(continueButton);
         final owner = tester.getRect(
           find.byKey(const ValueKey('current-work-card')),
         );
-        expect(owner.contains(menu.topLeft), isTrue);
-        expect(owner.contains(menu.bottomRight), isTrue);
+        final remove = tester.getRect(item);
+        expect(owner.contains(remove.topLeft), isTrue);
+        expect(owner.contains(remove.bottomRight), isTrue);
         expect(trigger.width, lessThanOrEqualTo(28));
-        expect(menu.overlaps(action), isFalse);
-        expect(menu.right, lessThanOrEqualTo(width - 8));
+        expect(remove.overlaps(action), isFalse);
+        expect(find.byType(PopupMenuItem<String>), findsNothing);
         await tester.tapAt(const Offset(20, 200));
         await tester.pumpAndSettle();
         expect(item, findsNothing);

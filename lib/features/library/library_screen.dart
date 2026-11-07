@@ -453,7 +453,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             _WorkItemMenu(
               controller: controller,
               entry: entry,
-              cardContext: context,
+              key: ValueKey('work-actions-${entry.workId}'),
             ),
             const SizedBox(width: 16),
           ],
@@ -672,23 +672,11 @@ class _WorkCard extends StatelessWidget {
                 height: _bookInfoHeight,
                 child: Padding(
                   padding: const EdgeInsets.only(left: 10, right: 4),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          entry.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 14, height: 1.4),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      _WorkItemMenu(
-                        controller: controller,
-                        entry: entry,
-                        cardContext: context,
-                      ),
-                    ],
+                  child: _WorkItemMenu(
+                    key: ValueKey('work-actions-${entry.workId}'),
+                    controller: controller,
+                    entry: entry,
+                    title: entry.title,
                   ),
                 ),
               ),
@@ -781,120 +769,94 @@ ButtonStyle _smallLibraryButton(InkPalette colors) => IconButton.styleFrom(
   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
 );
 
-class _WorkItemMenu extends StatelessWidget {
+class _WorkItemMenu extends StatefulWidget {
   const _WorkItemMenu({
+    super.key,
     required this.controller,
     required this.entry,
-    required this.cardContext,
+    this.title,
   });
   final WorkbenchController controller;
   final RecentWork entry;
-  final BuildContext cardContext;
+  final String? title;
+
+  @override
+  State<_WorkItemMenu> createState() => _WorkItemMenuState();
+}
+
+class _WorkItemMenuState extends State<_WorkItemMenu> {
+  bool _expanded = false;
+
+  Future<void> _edit() async {
+    setState(() => _expanded = false);
+    await LibraryScreen.editWork(context, widget.controller, widget.entry);
+  }
+
+  Future<void> _trash() async {
+    setState(() => _expanded = false);
+    final confirmed = await confirmAction(
+      context,
+      '删除《${widget.entry.title}》？',
+      '作品将从本机书架移入“作品回收站”。稿件文件保留在原位置，可在“书库管理”中恢复。',
+      action: '移入回收站',
+    );
+    if (confirmed && mounted) {
+      await uiAction(context, () => widget.controller.trashWork(widget.entry));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = InkPalette.of(context);
-    PopupMenuItem<String> item(
-      String value,
+    Widget action(
       String label,
-      IconData icon, {
+      VoidCallback onPressed, {
       bool destructive = false,
-    }) => PopupMenuItem<String>(
-      value: value,
-      height: 26,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+    }) => TextButton(
+      style: TextButton.styleFrom(
+        foregroundColor: destructive
+            ? Theme.of(context).colorScheme.error
+            : colors.ink,
+        minimumSize: const Size(40, 28),
+        padding: EdgeInsets.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: const TextStyle(fontSize: 13),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ),
+      onPressed: onPressed,
+      child: Text(label),
+    );
+    return TapRegion(
+      onTapOutside: (_) {
+        if (_expanded) setState(() => _expanded = false);
+      },
       child: Row(
+        mainAxisSize: widget.title == null
+            ? MainAxisSize.min
+            : MainAxisSize.max,
         children: [
-          Icon(
-            icon,
-            size: 14,
-            color: destructive
-                ? Theme.of(context).colorScheme.error
-                : colors.muted,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: destructive
-                  ? Theme.of(context).colorScheme.error
-                  : colors.ink,
+          if (_expanded) ...[
+            action('编辑', _edit),
+            action('删除', _trash, destructive: true),
+            if (widget.title != null) const Spacer(),
+          ] else if (widget.title != null)
+            Expanded(
+              child: Text(
+                widget.title!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14, height: 1.4),
+              ),
             ),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: _expanded ? '收起作品操作' : '${widget.entry.title} 的作品操作',
+            style: _smallLibraryButton(colors),
+            icon: Icon(_expanded ? InkIcons.close : InkIcons.more, size: 16),
+            onPressed: () => setState(() => _expanded = !_expanded),
           ),
         ],
       ),
-    );
-    return IconButton(
-      tooltip: '${entry.title} 的作品操作',
-      style: _smallLibraryButton(colors),
-      icon: const Icon(InkIcons.more, size: 16),
-      onPressed: () async {
-        final ownerContext = cardContext;
-        final overlay =
-            Navigator.of(context).overlay!.context.findRenderObject()!
-                as RenderBox;
-        await Scrollable.ensureVisible(
-          ownerContext,
-          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
-        );
-        await WidgetsBinding.instance.endOfFrame;
-        if (!context.mounted || !ownerContext.mounted) {
-          return;
-        }
-        final owner = ownerContext.findRenderObject()! as RenderBox;
-        final trigger = context.findRenderObject()! as RenderBox;
-        final ownerRect =
-            owner.localToGlobal(Offset.zero, ancestor: overlay) & owner.size;
-        final triggerRect =
-            trigger.localToGlobal(Offset.zero, ancestor: overlay) &
-            trigger.size;
-        final width = (ownerRect.width - 8).clamp(0.0, 128.0);
-        final left = (triggerRect.right - width).clamp(
-          ownerRect.left + 4,
-          ownerRect.right - width - 4,
-        );
-        // Keep the menu above the action row and inside this book's surface.
-        final top = (triggerRect.center.dy - 52 - 24).clamp(
-          ownerRect.top + 4,
-          ownerRect.bottom - 52 - 4,
-        );
-        final action = await showMenu<String>(
-          context: context,
-          position: RelativeRect.fromRect(
-            Rect.fromLTWH(left, top, width, 0),
-            Offset.zero & overlay.size,
-          ),
-          constraints: BoxConstraints.tightFor(width: width),
-          color: colors.background,
-          surfaceTintColor: Colors.transparent,
-          elevation: 2,
-          menuPadding: EdgeInsets.zero,
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
-            side: BorderSide(color: colors.line.withValues(alpha: .55)),
-          ),
-          items: [
-            item('edit', '编辑作品', InkIcons.edit),
-            item('trash', '删除作品', InkIcons.trash, destructive: true),
-          ],
-        );
-        if (action == null || !context.mounted) return;
-        if (action == 'edit') {
-          await LibraryScreen.editWork(context, controller, entry);
-        } else {
-          final confirmed = await confirmAction(
-            context,
-            '删除《${entry.title}》？',
-            '作品将从本机书架移入“作品回收站”。稿件文件保留在原位置，可在“书库管理”中恢复。',
-            action: '移入回收站',
-          );
-          if (confirmed && context.mounted) {
-            await uiAction(context, () => controller.trashWork(entry));
-          }
-        }
-      },
     );
   }
 }

@@ -306,7 +306,7 @@ void main() {
   );
 
   testWidgets(
-    'book menu stays inside its themed card and controls are compact',
+    'book actions replace the footer without covering the cover or moving cards',
     (tester) async {
       await showLibrary(tester);
       controller.updateAppearance(controller.appearance.select('forest'));
@@ -331,26 +331,42 @@ void main() {
       );
       await tester.tap(trigger);
       await tester.pumpAndSettle();
-      final material = find
-          .ancestor(
-            of: find.widgetWithText(PopupMenuItem<String>, '删除作品'),
-            matching: find.byType(Material),
-          )
-          .first;
-      final menu = tester.getRect(material);
-      expect(bounds.contains(menu.topLeft), isTrue);
-      expect(bounds.contains(menu.bottomRight), isTrue);
-      final color = tester.widget<Material>(material).color!;
-      expect(
-        (color.computeLuminance() -
-                InkPalette.from(
-                  controller.appearance,
-                ).background.computeLuminance())
-            .abs(),
-        lessThan(.035),
+      final edit = find.widgetWithText(TextButton, '编辑');
+      final remove = find.widgetWithText(TextButton, '删除');
+      expect(edit, findsOneWidget);
+      expect(remove, findsOneWidget);
+      final cover = tester.getRect(
+        find.descendant(
+          of: find.byKey(
+            ValueKey(
+              'work-card-${controller.preferences.recentWorks.first.workId}',
+            ),
+          ),
+          matching: find.byType(BookCover),
+        ),
       );
+      for (final button in [edit, remove]) {
+        final action = tester.getRect(button);
+        expect(bounds.contains(action.topLeft), isTrue);
+        expect(bounds.contains(action.bottomRight), isTrue);
+        expect(action.top, greaterThanOrEqualTo(cover.bottom));
+      }
+      expect(find.byType(PopupMenuItem<String>), findsNothing);
+      expect(find.byTooltip('收起作品操作'), findsOneWidget);
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
+      expect(edit, findsNothing);
+      expect(remove, findsNothing);
+      expect(
+        tester.getRect(
+          find.byKey(
+            ValueKey(
+              'work-card-${controller.preferences.recentWorks.first.workId}',
+            ),
+          ),
+        ),
+        bounds,
+      );
     },
   );
 }
