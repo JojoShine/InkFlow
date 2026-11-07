@@ -214,14 +214,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               : LayoutBuilder(
                                   builder: (context, constraints) {
                                     final columns =
-                                        ((constraints.maxWidth + 16) / 144)
+                                        ((constraints.maxWidth + 16) / 160)
                                             .floor()
                                             .clamp(1, 6);
                                     final cardWidth =
                                         ((constraints.maxWidth -
                                                     16 * (columns - 1)) /
                                                 columns)
-                                            .clamp(0.0, 128.0);
+                                            .clamp(0.0, 144.0);
                                     final cardHeight =
                                         cardWidth / _bookCoverAspectRatio +
                                         _bookInfoHeight +
@@ -450,7 +450,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 icon: const Icon(InkIcons.edit, size: 18),
               ),
             const SizedBox(width: 16),
-            _WorkItemMenu(controller: controller, entry: entry),
+            _WorkItemMenu(
+              controller: controller,
+              entry: entry,
+              cardContext: context,
+            ),
             const SizedBox(width: 16),
           ],
         ),
@@ -459,6 +463,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   );
 
   Widget _toolbar(InkPalette colors, String title, int count) => LayoutBuilder(
+    key: const ValueKey('library-search-toolbar'),
     builder: (context, constraints) {
       final label = Text(
         '$title · $count 本',
@@ -472,15 +477,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
         decoration: InputDecoration(
           hintText: '搜索书名、简介或标签',
           prefixIcon: const Icon(InkIcons.search, size: 18),
+          suffixIconConstraints: const BoxConstraints.tightFor(
+            width: 32,
+            height: 32,
+          ),
           suffixIcon: _search.text.isEmpty
               ? null
-              : IconButton(
-                  tooltip: '清空搜索',
-                  icon: const Icon(InkIcons.close, size: 16),
-                  onPressed: () {
-                    _search.clear();
-                    _showPage(0);
-                  },
+              : Center(
+                  child: IconButton(
+                    style: _smallLibraryButton(colors),
+                    tooltip: '清空搜索',
+                    icon: const Icon(InkIcons.close, size: 14),
+                    onPressed: () {
+                      _search.clear();
+                      _showPage(0);
+                    },
+                  ),
                 ),
           isDense: true,
           contentPadding: const EdgeInsets.symmetric(
@@ -671,7 +683,11 @@ class _WorkCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      _WorkItemMenu(controller: controller, entry: entry),
+                      _WorkItemMenu(
+                        controller: controller,
+                        entry: entry,
+                        cardContext: context,
+                      ),
                     ],
                   ),
                 ),
@@ -754,10 +770,26 @@ class LibraryActionsMenu extends StatelessWidget {
   );
 }
 
+ButtonStyle _smallLibraryButton(InkPalette colors) => IconButton.styleFrom(
+  minimumSize: const Size(24, 24),
+  fixedSize: const Size(24, 24),
+  padding: EdgeInsets.zero,
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  backgroundColor: Colors.transparent,
+  foregroundColor: colors.muted,
+  hoverColor: colors.selection.withValues(alpha: .45),
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+);
+
 class _WorkItemMenu extends StatelessWidget {
-  const _WorkItemMenu({required this.controller, required this.entry});
+  const _WorkItemMenu({
+    required this.controller,
+    required this.entry,
+    required this.cardContext,
+  });
   final WorkbenchController controller;
   final RecentWork entry;
+  final BuildContext cardContext;
 
   @override
   Widget build(BuildContext context) {
@@ -767,20 +799,20 @@ class _WorkItemMenu extends StatelessWidget {
       String label,
       IconData icon, {
       bool destructive = false,
-    }) => PopupMenuItem(
+    }) => PopupMenuItem<String>(
       value: value,
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      height: 26,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Row(
         children: [
           Icon(
             icon,
-            size: 16,
+            size: 14,
             color: destructive
                 ? Theme.of(context).colorScheme.error
                 : colors.muted,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Text(
             label,
             style: TextStyle(
@@ -793,21 +825,62 @@ class _WorkItemMenu extends StatelessWidget {
         ],
       ),
     );
-    return PopupMenuButton<String>(
+    return IconButton(
       tooltip: '${entry.title} 的作品操作',
-      padding: EdgeInsets.zero,
-      position: PopupMenuPosition.under,
-      offset: const Offset(0, 12),
-      constraints: const BoxConstraints(minWidth: 168, maxWidth: 180),
-      elevation: 3,
-      menuPadding: const EdgeInsets.symmetric(vertical: 6),
-      icon: const Icon(InkIcons.more, size: 18),
-      itemBuilder: (_) => [
-        item('edit', '编辑作品', InkIcons.edit),
-        const PopupMenuDivider(height: 8),
-        item('trash', '删除作品', InkIcons.trash, destructive: true),
-      ],
-      onSelected: (action) async {
+      style: _smallLibraryButton(colors),
+      icon: const Icon(InkIcons.more, size: 16),
+      onPressed: () async {
+        final ownerContext = cardContext;
+        final overlay =
+            Navigator.of(context).overlay!.context.findRenderObject()!
+                as RenderBox;
+        await Scrollable.ensureVisible(
+          ownerContext,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+        );
+        await WidgetsBinding.instance.endOfFrame;
+        if (!context.mounted || !ownerContext.mounted) {
+          return;
+        }
+        final owner = ownerContext.findRenderObject()! as RenderBox;
+        final trigger = context.findRenderObject()! as RenderBox;
+        final ownerRect =
+            owner.localToGlobal(Offset.zero, ancestor: overlay) & owner.size;
+        final triggerRect =
+            trigger.localToGlobal(Offset.zero, ancestor: overlay) &
+            trigger.size;
+        final width = (ownerRect.width - 8).clamp(0.0, 128.0);
+        final left = (triggerRect.right - width).clamp(
+          ownerRect.left + 4,
+          ownerRect.right - width - 4,
+        );
+        // Keep the menu above the action row and inside this book's surface.
+        final top = (triggerRect.center.dy - 52 - 24).clamp(
+          ownerRect.top + 4,
+          ownerRect.bottom - 52 - 4,
+        );
+        final action = await showMenu<String>(
+          context: context,
+          position: RelativeRect.fromRect(
+            Rect.fromLTWH(left, top, width, 0),
+            Offset.zero & overlay.size,
+          ),
+          constraints: BoxConstraints.tightFor(width: width),
+          color: colors.background,
+          surfaceTintColor: Colors.transparent,
+          elevation: 2,
+          menuPadding: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6),
+            side: BorderSide(color: colors.line.withValues(alpha: .55)),
+          ),
+          items: [
+            item('edit', '编辑作品', InkIcons.edit),
+            item('trash', '删除作品', InkIcons.trash, destructive: true),
+          ],
+        );
+        if (action == null || !context.mounted) return;
         if (action == 'edit') {
           await LibraryScreen.editWork(context, controller, entry);
         } else {

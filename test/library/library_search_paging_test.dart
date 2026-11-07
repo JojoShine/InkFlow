@@ -90,8 +90,8 @@ void main() {
     final cover = find.descendant(of: card, matching: find.byType(BookCover));
     final coverSize = tester.getSize(cover);
     expect(coverSize.width / coverSize.height, closeTo(2 / 3, .01));
-    expect(coverSize.width, lessThanOrEqualTo(128));
-    expect(tester.getSize(card).height, lessThanOrEqualTo(250));
+    expect(coverSize.width, lessThanOrEqualTo(144));
+    expect(tester.getSize(card).height, lessThanOrEqualTo(275));
     expect(tester.getRect(cover).left, closeTo(tester.getRect(card).left, .1));
     expect(
       tester.getRect(cover).right,
@@ -133,7 +133,7 @@ void main() {
         expect(firstRow[i].left - firstRow[i - 1].right, closeTo(16, .1));
       }
       for (final rect in rects) {
-        expect(rect.width, lessThanOrEqualTo(128));
+        expect(rect.width, lessThanOrEqualTo(144));
         expect(rect.width / rect.height, closeTo(2 / 3, .01));
       }
       expect(tester.takeException(), isNull);
@@ -263,6 +263,94 @@ void main() {
       await tester.ensureVisible(find.byTooltip('作品01 的作品操作'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'Chinese composition keeps focus when current book is filtered out',
+    (tester) async {
+      await showLibrary(tester);
+      controller.work = await tester.runAsync(
+        () => WorkRepository.create(Directory('${root.path}/ime'), '中文作品'),
+      );
+      controller.notifyListeners();
+      await tester.pumpAndSettle();
+      final search = find.byKey(const ValueKey('library-search'));
+      await tester.showKeyboard(search);
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'zhong',
+          selection: TextSelection.collapsed(offset: 5),
+          composing: TextRange(start: 0, end: 5),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final editable = tester.state<EditableTextState>(
+        find.descendant(of: search, matching: find.byType(EditableText)),
+      );
+      expect(editable.widget.focusNode.hasFocus, isTrue);
+      expect(tester.testTextInput.hasAnyClients, isTrue);
+      expect(
+        editable.widget.controller.value.composing,
+        const TextRange(start: 0, end: 5),
+      );
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: '中文',
+          selection: TextSelection.collapsed(offset: 2),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(displayedTitles(tester), ['中文作品']);
+      expect(editable.widget.focusNode.hasFocus, isTrue);
+    },
+  );
+
+  testWidgets(
+    'book menu stays inside its themed card and controls are compact',
+    (tester) async {
+      await showLibrary(tester);
+      controller.updateAppearance(controller.appearance.select('forest'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('library-search')),
+        '作品',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSize(find.byTooltip('清空搜索')).width,
+        lessThanOrEqualTo(28),
+      );
+      final trigger = find.byTooltip('作品01 的作品操作');
+      expect(tester.getSize(trigger).width, lessThanOrEqualTo(28));
+      final bounds = tester.getRect(
+        find.byKey(
+          ValueKey(
+            'work-card-${controller.preferences.recentWorks.first.workId}',
+          ),
+        ),
+      );
+      await tester.tap(trigger);
+      await tester.pumpAndSettle();
+      final material = find
+          .ancestor(
+            of: find.widgetWithText(PopupMenuItem<String>, '删除作品'),
+            matching: find.byType(Material),
+          )
+          .first;
+      final menu = tester.getRect(material);
+      expect(bounds.contains(menu.topLeft), isTrue);
+      expect(bounds.contains(menu.bottomRight), isTrue);
+      final color = tester.widget<Material>(material).color!;
+      expect(
+        (color.computeLuminance() -
+                InkPalette.from(
+                  controller.appearance,
+                ).background.computeLuminance())
+            .abs(),
+        lessThan(.035),
+      );
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
     },
   );
 }

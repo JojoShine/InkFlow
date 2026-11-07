@@ -74,7 +74,7 @@ void main() {
       final card = find.byKey(
         ValueKey('work-card-${c.preferences.recentWorks.last.workId}'),
       );
-      expect(tester.getSize(card).height, lessThanOrEqualTo(250));
+      expect(tester.getSize(card).height, lessThanOrEqualTo(275));
       final defaultCover = find.descendant(
         of: card,
         matching: find.byType(BookCover),

@@ -97,8 +97,12 @@ void main() {
         final menu = tester.getRect(
           find.ancestor(of: item, matching: find.byType(Material)).first,
         );
-        expect(menu.top - action.bottom, greaterThanOrEqualTo(8));
-        expect(menu.top - trigger.bottom, greaterThanOrEqualTo(8));
+        final owner = tester.getRect(
+          find.byKey(const ValueKey('current-work-card')),
+        );
+        expect(owner.contains(menu.topLeft), isTrue);
+        expect(owner.contains(menu.bottomRight), isTrue);
+        expect(trigger.width, lessThanOrEqualTo(28));
         expect(menu.overlaps(action), isFalse);
         expect(menu.right, lessThanOrEqualTo(width - 8));
         await tester.tapAt(const Offset(20, 200));
