@@ -260,7 +260,7 @@ void main() {
         find.byKey(const ValueKey('library-next-page')).hitTestable(),
         findsOneWidget,
       );
-      await tester.ensureVisible(find.byTooltip('作品01 的作品操作'));
+      await tester.ensureVisible(find.byTooltip('编辑作品：作品01'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },
@@ -306,7 +306,7 @@ void main() {
   );
 
   testWidgets(
-    'book actions replace the footer without covering the cover or moving cards',
+    'book actions stay fixed in the cover top right with the title visible',
     (tester) async {
       await showLibrary(tester);
       controller.updateAppearance(controller.appearance.select('forest'));
@@ -320,53 +320,43 @@ void main() {
         tester.getSize(find.byTooltip('清空搜索')).width,
         lessThanOrEqualTo(28),
       );
-      final trigger = find.byTooltip('作品01 的作品操作');
-      expect(tester.getSize(trigger).width, lessThanOrEqualTo(28));
-      final bounds = tester.getRect(
-        find.byKey(
-          ValueKey(
-            'work-card-${controller.preferences.recentWorks.first.workId}',
-          ),
+      final card = find.byKey(
+        ValueKey(
+          'work-card-${controller.preferences.recentWorks.first.workId}',
         ),
       );
-      await tester.tap(trigger);
-      await tester.pumpAndSettle();
-      final edit = find.widgetWithText(TextButton, '编辑');
-      final remove = find.widgetWithText(TextButton, '删除');
+      final cover = tester.getRect(
+        find.descendant(of: card, matching: find.byType(BookCover)),
+      );
+      final edit = find.byTooltip('编辑作品：作品01');
+      final remove = find.byTooltip('删除作品：作品01');
       expect(edit, findsOneWidget);
       expect(remove, findsOneWidget);
-      final cover = tester.getRect(
-        find.descendant(
-          of: find.byKey(
-            ValueKey(
-              'work-card-${controller.preferences.recentWorks.first.workId}',
-            ),
-          ),
-          matching: find.byType(BookCover),
-        ),
-      );
       for (final button in [edit, remove]) {
         final action = tester.getRect(button);
-        expect(bounds.contains(action.topLeft), isTrue);
-        expect(bounds.contains(action.bottomRight), isTrue);
-        expect(action.top, greaterThanOrEqualTo(cover.bottom));
+        expect(cover.contains(action.topLeft), isTrue);
+        expect(cover.contains(action.bottomRight), isTrue);
+        expect(action.top - cover.top, inInclusiveRange(4, 10));
+        expect(action.width, lessThanOrEqualTo(28));
       }
-      expect(find.byType(PopupMenuItem<String>), findsNothing);
-      expect(find.byTooltip('收起作品操作'), findsOneWidget);
-      await tester.tapAt(const Offset(10, 10));
-      await tester.pumpAndSettle();
-      expect(edit, findsNothing);
-      expect(remove, findsNothing);
       expect(
-        tester.getRect(
-          find.byKey(
-            ValueKey(
-              'work-card-${controller.preferences.recentWorks.first.workId}',
-            ),
-          ),
-        ),
-        bounds,
+        cover.right - tester.getRect(remove).right,
+        inInclusiveRange(4, 10),
       );
+      expect(
+        tester.getRect(edit).right,
+        lessThanOrEqualTo(tester.getRect(remove).left),
+      );
+      final titles = find.descendant(of: card, matching: find.text('作品01'));
+      expect(
+        titles.evaluate().any(
+          (element) =>
+              tester.getRect(find.byWidget(element.widget)).top >= cover.bottom,
+        ),
+        isTrue,
+      );
+      expect(find.byType(PopupMenuItem<String>), findsNothing);
+      expect(tester.takeException(), isNull);
     },
   );
 }

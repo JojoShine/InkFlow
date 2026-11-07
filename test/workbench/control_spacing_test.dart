@@ -1,3 +1,4 @@
+import 'package:inkflow/features/library/book_cover.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,7 +64,7 @@ void main() {
   );
 
   testWidgets(
-    'inline work actions leave the continue action usable at regular and narrow widths',
+    'cover actions stay in the top right away from the continue action',
     (tester) async {
       await tester.runAsync(c.showLibrary);
       tester.view.devicePixelRatio = 1;
@@ -87,23 +88,18 @@ void main() {
               .height,
           greaterThanOrEqualTo(160),
         );
-        final trigger = tester.getRect(find.byTooltip('春日来信 的作品操作'));
-        await tester.tap(find.byTooltip('春日来信 的作品操作'));
-        await tester.pumpAndSettle();
-        final item = find.widgetWithText(TextButton, '删除');
+        final cover = tester.getRect(find.byType(BookCover).first);
+        final edit = tester.getRect(find.byTooltip('编辑作品：春日来信'));
+        final remove = tester.getRect(find.byTooltip('删除作品：春日来信'));
         final action = tester.getRect(continueButton);
-        final owner = tester.getRect(
-          find.byKey(const ValueKey('current-work-card')),
-        );
-        final remove = tester.getRect(item);
-        expect(owner.contains(remove.topLeft), isTrue);
-        expect(owner.contains(remove.bottomRight), isTrue);
-        expect(trigger.width, lessThanOrEqualTo(28));
-        expect(remove.overlaps(action), isFalse);
+        for (final button in [edit, remove]) {
+          expect(cover.contains(button.topLeft), isTrue);
+          expect(cover.contains(button.bottomRight), isTrue);
+          expect(button.top - cover.top, inInclusiveRange(4, 10));
+          expect(button.overlaps(action), isFalse);
+        }
+        expect(cover.right - remove.right, inInclusiveRange(4, 10));
         expect(find.byType(PopupMenuItem<String>), findsNothing);
-        await tester.tapAt(const Offset(20, 200));
-        await tester.pumpAndSettle();
-        expect(item, findsNothing);
       }
       await tester.pumpWidget(const SizedBox.shrink());
     },

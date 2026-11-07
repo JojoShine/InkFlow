@@ -390,12 +390,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
         height: _currentBookHeight,
         child: Row(
           children: [
-            BookCover(
+            _LibraryBookCover(
               entry: entry,
-              services: controller.services,
+              controller: controller,
               width: _currentBookHeight / 1.5,
               height: _currentBookHeight,
-              borderRadius: BorderRadius.zero,
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -449,12 +448,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 tooltip: '继续写作',
                 icon: const Icon(InkIcons.edit, size: 18),
               ),
-            const SizedBox(width: 16),
-            _WorkItemMenu(
-              controller: controller,
-              entry: entry,
-              key: ValueKey('work-actions-${entry.workId}'),
-            ),
             const SizedBox(width: 16),
           ],
         ),
@@ -661,22 +654,24 @@ class _WorkCard extends StatelessWidget {
           builder: (context, constraints) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              BookCover(
+              _LibraryBookCover(
                 entry: entry,
-                services: controller.services,
+                controller: controller,
                 width: constraints.maxWidth,
                 height: constraints.maxWidth / _bookCoverAspectRatio,
-                borderRadius: BorderRadius.zero,
               ),
               SizedBox(
                 height: _bookInfoHeight,
                 child: Padding(
                   padding: const EdgeInsets.only(left: 10, right: 4),
-                  child: _WorkItemMenu(
-                    key: ValueKey('work-actions-${entry.workId}'),
-                    controller: controller,
-                    entry: entry,
-                    title: entry.title,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      entry.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14, height: 1.4),
+                    ),
                   ),
                 ),
               ),
@@ -769,93 +764,92 @@ ButtonStyle _smallLibraryButton(InkPalette colors) => IconButton.styleFrom(
   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
 );
 
-class _WorkItemMenu extends StatefulWidget {
-  const _WorkItemMenu({
-    super.key,
+class _LibraryBookCover extends StatelessWidget {
+  const _LibraryBookCover({
     required this.controller,
     required this.entry,
-    this.title,
+    required this.width,
+    required this.height,
   });
   final WorkbenchController controller;
   final RecentWork entry;
-  final String? title;
+  final double width;
+  final double height;
 
   @override
-  State<_WorkItemMenu> createState() => _WorkItemMenuState();
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    height: height,
+    child: Stack(
+      children: [
+        BookCover(
+          entry: entry,
+          services: controller.services,
+          width: width,
+          height: height,
+          borderRadius: BorderRadius.zero,
+        ),
+        Positioned(
+          top: 6,
+          right: 6,
+          child: _WorkCoverActions(controller: controller, entry: entry),
+        ),
+      ],
+    ),
+  );
 }
 
-class _WorkItemMenuState extends State<_WorkItemMenu> {
-  bool _expanded = false;
+class _WorkCoverActions extends StatelessWidget {
+  const _WorkCoverActions({required this.controller, required this.entry});
+  final WorkbenchController controller;
+  final RecentWork entry;
 
-  Future<void> _edit() async {
-    setState(() => _expanded = false);
-    await LibraryScreen.editWork(context, widget.controller, widget.entry);
-  }
-
-  Future<void> _trash() async {
-    setState(() => _expanded = false);
+  Future<void> _trash(BuildContext context) async {
     final confirmed = await confirmAction(
       context,
-      '删除《${widget.entry.title}》？',
+      '删除《${entry.title}》？',
       '作品将从本机书架移入“作品回收站”。稿件文件保留在原位置，可在“书库管理”中恢复。',
       action: '移入回收站',
     );
-    if (confirmed && mounted) {
-      await uiAction(context, () => widget.controller.trashWork(widget.entry));
+    if (confirmed && context.mounted) {
+      await uiAction(context, () => controller.trashWork(entry));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = InkPalette.of(context);
-    Widget action(
-      String label,
-      VoidCallback onPressed, {
-      bool destructive = false,
-    }) => TextButton(
-      style: TextButton.styleFrom(
-        foregroundColor: destructive
-            ? Theme.of(context).colorScheme.error
-            : colors.ink,
-        minimumSize: const Size(40, 28),
-        padding: EdgeInsets.zero,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        textStyle: const TextStyle(fontSize: 13),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+    return Material(
+      color: colors.background.withValues(alpha: .94),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(4),
+        side: BorderSide(color: colors.line.withValues(alpha: .55)),
       ),
-      onPressed: onPressed,
-      child: Text(label),
-    );
-    return TapRegion(
-      onTapOutside: (_) {
-        if (_expanded) setState(() => _expanded = false);
-      },
-      child: Row(
-        mainAxisSize: widget.title == null
-            ? MainAxisSize.min
-            : MainAxisSize.max,
-        children: [
-          if (_expanded) ...[
-            action('编辑', _edit),
-            action('删除', _trash, destructive: true),
-            if (widget.title != null) const Spacer(),
-          ] else if (widget.title != null)
-            Expanded(
-              child: Text(
-                widget.title!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 14, height: 1.4),
-              ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: '编辑作品：${entry.title}',
+              style: _smallLibraryButton(colors),
+              icon: const Icon(InkIcons.edit, size: 14),
+              onPressed: () =>
+                  LibraryScreen.editWork(context, controller, entry),
             ),
-          const SizedBox(width: 4),
-          IconButton(
-            tooltip: _expanded ? '收起作品操作' : '${widget.entry.title} 的作品操作',
-            style: _smallLibraryButton(colors),
-            icon: Icon(_expanded ? InkIcons.close : InkIcons.more, size: 16),
-            onPressed: () => setState(() => _expanded = !_expanded),
-          ),
-        ],
+            IconButton(
+              tooltip: '删除作品：${entry.title}',
+              style: _smallLibraryButton(colors).copyWith(
+                foregroundColor: WidgetStatePropertyAll(
+                  Theme.of(context).colorScheme.error,
+                ),
+              ),
+              icon: const Icon(InkIcons.trash, size: 14),
+              onPressed: () => _trash(context),
+            ),
+          ],
+        ),
       ),
     );
   }
