@@ -91,7 +91,7 @@ void main() {
       expect(button.overlaps(cover), isFalse);
       await tester.tap(trigger);
       await tester.pumpAndSettle();
-      final remove = find.widgetWithText(PopupMenuItem<String>, '删除作品');
+      final remove = find.widgetWithText(PopupMenuItem<String>, '删除');
       final surface = find
           .ancestor(of: remove, matching: find.byType(Material))
           .first;

@@ -54,7 +54,7 @@ void main() {
       expect(location.bottom, closeTo(784, 1));
       await tester.tap(find.byTooltip('春日来信 的作品操作'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('删除作品'));
+      await tester.tap(find.text('删除'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
@@ -62,7 +62,7 @@ void main() {
       expect(c.work, isNotNull);
       await tester.tap(find.byTooltip('春日来信 的作品操作'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('删除作品'));
+      await tester.tap(find.text('删除'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('移入回收站'));
       await waitFor(tester, () => c.work == null);

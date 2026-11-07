@@ -797,7 +797,7 @@ class _WorkItemMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = InkPalette.of(context);
-    PopupMenuItem<String> item(String value, String label, IconData icon) {
+    PopupMenuItem<String> item(String value, String label) {
       final color = value == 'trash'
           ? Theme.of(context).colorScheme.error
           : colors.ink;
@@ -806,22 +806,14 @@ class _WorkItemMenu extends StatelessWidget {
         style: TextStyle(
           fontSize: 13,
           color: color,
-          fontWeight: isCard ? FontWeight.w400 : null,
+          fontWeight: FontWeight.w400,
         ),
       );
       return PopupMenuItem<String>(
         value: value,
-        height: isCard ? 28 : 26,
-        padding: EdgeInsets.symmetric(horizontal: isCard ? 12 : 10),
-        child: isCard
-            ? text
-            : Row(
-                children: [
-                  Icon(icon, size: 14, color: color),
-                  const SizedBox(width: 8),
-                  text,
-                ],
-              ),
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: text,
       );
     }
 
@@ -854,9 +846,9 @@ class _WorkItemMenu extends StatelessWidget {
           final button =
               trigger.localToGlobal(Offset.zero, ancestor: overlay) &
               trigger.size;
-          final width = isCard ? 96.0 : (bounds.width - 12).clamp(0.0, 120.0);
+          const width = 96.0;
           var left = bounds.right - 16 - width;
-          var top = (button.top - 64).clamp(bounds.top + 4, bounds.bottom - 56);
+          var top = (button.top - 76).clamp(8.0, overlay.size.height - 72);
           if (isCard) {
             final viewportBottom =
                 viewport!.localToGlobal(Offset.zero, ancestor: overlay).dy +
@@ -877,20 +869,15 @@ class _WorkItemMenu extends StatelessWidget {
             constraints: BoxConstraints.tightFor(width: width),
             color: colors.background,
             surfaceTintColor: Colors.transparent,
-            shadowColor: colors.ink.withValues(alpha: isCard ? .10 : .12),
+            shadowColor: colors.ink.withValues(alpha: .10),
             elevation: 2,
-            menuPadding: isCard ? const EdgeInsets.all(4) : EdgeInsets.zero,
+            menuPadding: const EdgeInsets.all(4),
             clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(isCard ? 4 : 6),
-              side: BorderSide(
-                color: colors.line.withValues(alpha: isCard ? .25 : .4),
-              ),
+              borderRadius: BorderRadius.circular(4),
+              side: BorderSide(color: colors.line.withValues(alpha: .25)),
             ),
-            items: [
-              item('edit', isCard ? '编辑' : '编辑作品', InkIcons.edit),
-              item('trash', isCard ? '删除' : '删除作品', InkIcons.trash),
-            ],
+            items: [item('edit', '编辑'), item('trash', '删除')],
           );
           if (action == null || !context.mounted) return;
           if (action == 'edit') {
