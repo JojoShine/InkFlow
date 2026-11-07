@@ -807,15 +807,6 @@ class _WorkItemMenu extends StatelessWidget {
           fontSize: 13,
           color: color,
           fontWeight: isCard ? FontWeight.w400 : null,
-          fontFamily: isCard ? 'Arial' : null,
-          fontFamilyFallback: isCard
-              ? const [
-                  'PingFang SC',
-                  'Microsoft YaHei',
-                  'Noto Sans CJK SC',
-                  'sans-serif',
-                ]
-              : null,
         ),
       );
       return PopupMenuItem<String>(
