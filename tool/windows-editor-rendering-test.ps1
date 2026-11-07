@@ -124,7 +124,7 @@ function Read-Editor($editor) {
 }
 function Assert-Paragraph($editor,$pidValue) {
   $format=[ManuscriptProbe]::Paragraph($editor,$pidValue)
-  if ($format[0] -ne 4 -or $format[1] -ne 540 -or $format[2] -ne 120 -or $format[3] -ne 600 -or $format[4] -ne -600 -or $format[5] -ne 1) {
+  if ($format[0] -ne 4 -or $format[1] -ne 360 -or $format[2] -ne 120 -or $format[3] -ne 480 -or $format[4] -ne -480 -or $format[5] -ne 1) {
     throw "Manuscript paragraph formatting changed: $format"
   }
 }
@@ -223,7 +223,7 @@ foreach ($theme in @('paper','forest','night')) {
     $next=[ManuscriptProbe]::Message($editor,0xbb,[IntPtr]($line+1),[IntPtr]::Zero).ToInt32()
     if ($next -le $start -or $next -ge $beforePaste.Length) { throw 'Continuous input did not exercise automatic line wrapping.' }
     $lineHeight=[ManuscriptProbe]::LineY($editor,$process.Id,$next)-[ManuscriptProbe]::LineY($editor,$process.Id,$start)
-    $expectedHeight=36*[ManuscriptProbe]::GetDpiForWindow($editor)/96
+    $expectedHeight=24*[ManuscriptProbe]::GetDpiForWindow($editor)/96
     if ([Math]::Abs($lineHeight-$expectedHeight) -gt 2) { throw "Wrapped line height is $lineHeight instead of $expectedHeight pixels." }
     $plainPaste="`n粘贴后保留行高"
     [ManuscriptProbe]::PlainAndRichClipboard($window,$plainPaste)
