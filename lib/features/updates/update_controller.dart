@@ -109,6 +109,7 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
   bool _nativeReady = false, _listening = false, _requesting = false;
   bool _disposed = false, _installActive = false;
   int _installGeneration = 0;
+  Timer? _checkTimeout;
 
   bool get busy =>
       _requesting ||
@@ -391,6 +392,17 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
   }
 
   void _set(UpdateStatus value, String text) {
+    if (value == UpdateStatus.checking && enabled) {
+      _checkTimeout ??= Timer(const Duration(seconds: 90), () {
+        _checkTimeout = null;
+        if (!_disposed && status == UpdateStatus.checking) {
+          _set(UpdateStatus.error, '检查更新超时，请检查网络连接后重试。');
+        }
+      });
+    } else {
+      _checkTimeout?.cancel();
+      _checkTimeout = null;
+    }
     status = value;
     message = text;
     _notify();
@@ -402,6 +414,7 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
 
   @override
   void dispose() {
+    _checkTimeout?.cancel();
     _disposed = true;
     _installGeneration++;
     if (_listening) _backend.removeListener(this);

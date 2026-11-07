@@ -10,7 +10,7 @@
 
 | 平台 | Runner | 工件 |
 | --- | --- | --- |
-| macOS Apple Silicon / Intel | `macos-26-intel`，构建通用二进制 | 两种架构各自的完整 `.app` ZIP |
+| macOS Apple Silicon / Intel | `macos-15`（Apple Silicon），构建通用二进制 | 两种架构各自的完整 `.app` ZIP |
 | Windows | `windows-2022` (x64) | Inno Setup 安装 EXE |
 
 Flutter 固定 `3.41.9`，自带 Dart `3.11.5`；依赖使用已提交 lockfile。mac 包保留 framework、XPC/helper、资源与符号链接；通用打包先验证主程序、App.framework 和 FlutterMacOS.framework 均含 x86_64 / arm64，再生成两份架构 feed 对应的包。Windows 安装器递归包含完整 Release 目录、Flutter engine、插件 DLL、assets，并添加 Visual Studio 已安装的 x64 VC CRT app-local DLL，不分发孤立 EXE。Windows runner 必须预装 Inno Setup 6 与 Visual C++ redistributable，缺失时明确报错。

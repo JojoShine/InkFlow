@@ -84,6 +84,31 @@ void main() {
     await controller.checkForUpdates();
     expect(backend.checks, 2);
   });
+  testWidgets('native check without completion times out and allows retry', (
+    tester,
+  ) async {
+    await controller.checkForUpdates();
+    expect(controller.status, UpdateStatus.checking);
+    await tester.pump(const Duration(seconds: 91));
+    expect(controller.status, UpdateStatus.error);
+    expect(controller.message, contains('超时'));
+    expect(controller.canCheck, isTrue);
+    await controller.checkForUpdates();
+    expect(backend.checks, 2);
+    backend.listener!.onUpdaterUpdateNotAvailable(null);
+  });
+
+  testWidgets('completed native checks keep their result after the deadline', (
+    tester,
+  ) async {
+    await controller.checkForUpdates();
+    backend.listener!.onUpdaterUpdateAvailable(
+      const AppcastItem(displayVersionString: '2.4'),
+    );
+    await tester.pump(const Duration(seconds: 91));
+    expect(controller.status, UpdateStatus.available);
+  });
+
   test('failed save prevents checking and allows retry', () async {
     saveOK = false;
     await controller.checkForUpdates();
@@ -233,27 +258,30 @@ void main() {
       expect(controller.canCheck, isTrue);
     },
   );
-  test('signed builds use native updates even with a download fallback', () async {
-    controller.dispose();
-    controller = UpdateController(
-      enabled: true,
-      backend: backend,
-      platform: TargetPlatform.macOS,
-      automaticChecks: false,
-      loadAppInfo: () async => const AppInfo('InkFlow', '0.1.0', '1'),
-      checkPublishedRelease: () async => throw StateError('fallback used'),
-      openDownloadPage: (_) async => fail('browser opened'),
-      saveBeforeCheck: () async => true,
-      prepareForInstall: () async => true,
-      quitAfterPrepared: () async {},
-      resumeEditing: () async {},
-    );
-    await controller.checkForUpdates();
-    expect(controller.usesDownloadUpdates, isFalse);
-    expect(controller.status, UpdateStatus.checking);
-    expect(backend.feed, UpdateController.macosFeedURL);
-    expect(backend.checks, 1);
-  });
+  test(
+    'signed builds use native updates even with a download fallback',
+    () async {
+      controller.dispose();
+      controller = UpdateController(
+        enabled: true,
+        backend: backend,
+        platform: TargetPlatform.macOS,
+        automaticChecks: false,
+        loadAppInfo: () async => const AppInfo('InkFlow', '0.1.0', '1'),
+        checkPublishedRelease: () async => throw StateError('fallback used'),
+        openDownloadPage: (_) async => fail('browser opened'),
+        saveBeforeCheck: () async => true,
+        prepareForInstall: () async => true,
+        quitAfterPrepared: () async {},
+        resumeEditing: () async {},
+      );
+      await controller.checkForUpdates();
+      expect(controller.usesDownloadUpdates, isFalse);
+      expect(controller.status, UpdateStatus.checking);
+      expect(backend.feed, UpdateController.macosFeedURL);
+      expect(backend.checks, 1);
+    },
+  );
   test('backend safety must succeed before feed initialization', () async {
     controller.dispose();
     controller = UpdateController(

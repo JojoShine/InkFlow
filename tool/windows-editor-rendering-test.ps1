@@ -5,6 +5,12 @@ if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Run this rendering fixture only in 
 $root = Join-Path $env:APPDATA 'me.tbtparent.inkflow/inkflow'
 if (Test-Path $root) { throw 'Application data already exists; refusing to overwrite it.' }
 $Executable = (Resolve-Path $Executable).Path
+# This editor fixture does not answer updater prompts. Keep its disposable
+# profile in manual-check mode so the permission dialog cannot become MainWindow.
+$details = [Diagnostics.FileVersionInfo]::GetVersionInfo($Executable)
+$updatePreferences = "HKCU:\Software\$($details.CompanyName)\$($details.ProductName)\WinSparkle"
+New-Item $updatePreferences -Force | Out-Null
+New-ItemProperty $updatePreferences -Name CheckForUpdates -Value '0' -PropertyType String -Force | Out-Null
 $out = Join-Path $PWD 'render-probe'
 $work = Join-Path $out '中文作品'
 New-Item -ItemType Directory -Force (Join-Path $work 'chapters'), $root | Out-Null
