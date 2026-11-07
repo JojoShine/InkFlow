@@ -390,11 +390,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
         height: _currentBookHeight,
         child: Row(
           children: [
-            _LibraryBookCover(
+            BookCover(
               entry: entry,
-              controller: controller,
+              services: controller.services,
               width: _currentBookHeight / 1.5,
               height: _currentBookHeight,
+              borderRadius: BorderRadius.zero,
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -448,6 +449,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 tooltip: '继续写作',
                 icon: const Icon(InkIcons.edit, size: 18),
               ),
+            const SizedBox(width: 16),
+            _WorkItemMenu(
+              controller: controller,
+              entry: entry,
+              ownerContext: context,
+            ),
             const SizedBox(width: 16),
           ],
         ),
@@ -792,64 +799,127 @@ class _LibraryBookCover extends StatelessWidget {
         Positioned(
           top: 6,
           right: 6,
-          child: _WorkCoverActions(controller: controller, entry: entry),
+          child: _WorkItemMenu(
+            controller: controller,
+            entry: entry,
+            ownerContext: context,
+            onCover: true,
+          ),
         ),
       ],
     ),
   );
 }
 
-class _WorkCoverActions extends StatelessWidget {
-  const _WorkCoverActions({required this.controller, required this.entry});
+class _WorkItemMenu extends StatelessWidget {
+  const _WorkItemMenu({
+    required this.controller,
+    required this.entry,
+    required this.ownerContext,
+    this.onCover = false,
+  });
   final WorkbenchController controller;
   final RecentWork entry;
-
-  Future<void> _trash(BuildContext context) async {
-    final confirmed = await confirmAction(
-      context,
-      '删除《${entry.title}》？',
-      '作品将从本机书架移入“作品回收站”。稿件文件保留在原位置，可在“书库管理”中恢复。',
-      action: '移入回收站',
-    );
-    if (confirmed && context.mounted) {
-      await uiAction(context, () => controller.trashWork(entry));
-    }
-  }
+  final BuildContext ownerContext;
+  final bool onCover;
 
   @override
   Widget build(BuildContext context) {
     final colors = InkPalette.of(context);
-    return Material(
-      color: colors.background.withValues(alpha: .94),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4),
-        side: BorderSide(color: colors.line.withValues(alpha: .55)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(2),
+    final overImage = onCover && entry.coverFile != null;
+    PopupMenuItem<String> item(String value, String label, IconData icon) {
+      final color = value == 'trash'
+          ? Theme.of(context).colorScheme.error
+          : colors.ink;
+      return PopupMenuItem<String>(
+        value: value,
+        height: onCover ? 30 : 26,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              tooltip: '编辑作品：${entry.title}',
-              style: _smallLibraryButton(colors),
-              icon: const Icon(InkIcons.edit, size: 14),
-              onPressed: () =>
-                  LibraryScreen.editWork(context, controller, entry),
-            ),
-            IconButton(
-              tooltip: '删除作品：${entry.title}',
-              style: _smallLibraryButton(colors).copyWith(
-                foregroundColor: WidgetStatePropertyAll(
-                  Theme.of(context).colorScheme.error,
-                ),
-              ),
-              icon: const Icon(InkIcons.trash, size: 14),
-              onPressed: () => _trash(context),
-            ),
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(fontSize: 13, color: color)),
           ],
         ),
+      );
+    }
+
+    return Material(
+      type: MaterialType.transparency,
+      child: IconButton(
+        tooltip: '${entry.title} 的作品操作',
+        style: _smallLibraryButton(colors),
+        icon: Icon(
+          InkIcons.more,
+          size: 16,
+          color: overImage ? Colors.white : colors.muted,
+          shadows: overImage
+              ? const [Shadow(color: Colors.black54, blurRadius: 3)]
+              : null,
+        ),
+        onPressed: () async {
+          final ownerContext = this.ownerContext;
+          final overlay =
+              Navigator.of(context).overlay!.context.findRenderObject()!
+                  as RenderBox;
+          await Scrollable.ensureVisible(
+            ownerContext,
+            alignmentPolicy: onCover
+                ? ScrollPositionAlignmentPolicy.keepVisibleAtEnd
+                : ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+          );
+          await WidgetsBinding.instance.endOfFrame;
+          if (!context.mounted || !ownerContext.mounted) return;
+          final owner = ownerContext.findRenderObject()! as RenderBox;
+          final trigger = context.findRenderObject()! as RenderBox;
+          final bounds =
+              owner.localToGlobal(Offset.zero, ancestor: overlay) & owner.size;
+          final button =
+              trigger.localToGlobal(Offset.zero, ancestor: overlay) &
+              trigger.size;
+          final width = (bounds.width - 12).clamp(0.0, 120.0);
+          final left = bounds.right - (onCover ? 6 : 16) - width;
+          final top = onCover
+              ? button.bottom + 4
+              : (button.top - 64).clamp(bounds.top + 4, bounds.bottom - 56);
+          final action = await showMenu<String>(
+            context: context,
+            position: RelativeRect.fromRect(
+              Rect.fromLTWH(left, top, width, 0),
+              Offset.zero & overlay.size,
+            ),
+            constraints: BoxConstraints.tightFor(width: width),
+            color: colors.background,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: colors.ink.withValues(alpha: .12),
+            elevation: 2,
+            menuPadding: EdgeInsets.symmetric(vertical: onCover ? 4 : 0),
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+              side: BorderSide(color: colors.line.withValues(alpha: .4)),
+            ),
+            items: [
+              item('edit', '编辑作品', InkIcons.edit),
+              item('trash', '删除作品', InkIcons.trash),
+            ],
+          );
+          if (action == null || !context.mounted) return;
+          if (action == 'edit') {
+            await LibraryScreen.editWork(context, controller, entry);
+          } else {
+            final confirmed = await confirmAction(
+              context,
+              '删除《${entry.title}》？',
+              '作品将从本机书架移入“作品回收站”。稿件文件保留在原位置，可在“书库管理”中恢复。',
+              action: '移入回收站',
+            );
+            if (confirmed && context.mounted) {
+              await uiAction(context, () => controller.trashWork(entry));
+            }
+          }
+        },
       ),
     );
   }

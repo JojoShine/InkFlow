@@ -89,12 +89,14 @@ void main() {
       final selection = c.session.controller.selection;
 
       Future<void> edit(String title) async {
-        await tester.ensureVisible(find.byTooltip('编辑作品：$title'));
+        await tester.ensureVisible(find.byTooltip('$title 的作品操作'));
         await tester.pumpAndSettle();
-        final delete = find.byTooltip('删除作品：$title');
+        await tester.tap(find.byTooltip('$title 的作品操作'));
+        await tester.pumpAndSettle();
+        final delete = find.widgetWithText(PopupMenuItem<String>, '删除作品');
         expect(tester.getSize(delete).height, lessThanOrEqualTo(38));
         expect(find.text('设置封面'), findsNothing);
-        await tester.tap(find.byTooltip('编辑作品：$title'));
+        await tester.tap(find.text('编辑作品'));
         await waitFor(
           tester,
           () => find

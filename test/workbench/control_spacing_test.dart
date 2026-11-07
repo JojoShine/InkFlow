@@ -63,45 +63,43 @@ void main() {
     },
   );
 
-  testWidgets(
-    'cover actions stay in the top right away from the continue action',
-    (tester) async {
-      await tester.runAsync(c.showLibrary);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(tester.view.resetPhysicalSize);
-      for (final width in [1100.0, 960.0]) {
-        tester.view.physicalSize = Size(width, 800);
-        await tester.pumpWidget(InkFlowApp(controller: c));
-        await tester.pumpAndSettle();
-        final continueButton = find.widgetWithText(OutlinedButton, '继续写作');
-        final arrow = tester.getRect(
-          find.descendant(of: continueButton, matching: find.byType(Icon)),
-        );
-        expect(
-          arrow.left,
-          greaterThan(tester.getRect(find.text('继续写作')).right),
-        );
-        expect(
-          tester
-              .getSize(find.byKey(const ValueKey('current-work-card')))
-              .height,
-          greaterThanOrEqualTo(160),
-        );
-        final cover = tester.getRect(find.byType(BookCover).first);
-        final edit = tester.getRect(find.byTooltip('编辑作品：春日来信'));
-        final remove = tester.getRect(find.byTooltip('删除作品：春日来信'));
-        final action = tester.getRect(continueButton);
-        for (final button in [edit, remove]) {
-          expect(cover.contains(button.topLeft), isTrue);
-          expect(cover.contains(button.bottomRight), isTrue);
-          expect(button.top - cover.top, inInclusiveRange(4, 10));
-          expect(button.overlaps(action), isFalse);
-        }
-        expect(cover.right - remove.right, inInclusiveRange(4, 10));
-        expect(find.byType(PopupMenuItem<String>), findsNothing);
-      }
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
+  testWidgets('current work keeps its menu beside the continue action', (
+    tester,
+  ) async {
+    await tester.runAsync(c.showLibrary);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    for (final width in [1100.0, 960.0]) {
+      tester.view.physicalSize = Size(width, 800);
+      await tester.pumpWidget(InkFlowApp(controller: c));
+      await tester.pumpAndSettle();
+      final continueButton = find.widgetWithText(OutlinedButton, '继续写作');
+      final arrow = tester.getRect(
+        find.descendant(of: continueButton, matching: find.byType(Icon)),
+      );
+      expect(arrow.left, greaterThan(tester.getRect(find.text('继续写作')).right));
+      expect(
+        tester.getSize(find.byKey(const ValueKey('current-work-card'))).height,
+        greaterThanOrEqualTo(160),
+      );
+      final cover = tester.getRect(find.byType(BookCover).first);
+      final trigger = find.byTooltip('春日来信 的作品操作');
+      final button = tester.getRect(trigger);
+      final action = tester.getRect(continueButton);
+      expect(button.left, greaterThan(action.right));
+      expect(button.overlaps(cover), isFalse);
+      await tester.tap(trigger);
+      await tester.pumpAndSettle();
+      final remove = find.widgetWithText(PopupMenuItem<String>, '删除作品');
+      final surface = find
+          .ancestor(of: remove, matching: find.byType(Material))
+          .first;
+      expect(tester.getRect(surface).overlaps(action), isFalse);
+      await tester.tapAt(const Offset(20, 200));
+      await tester.pumpAndSettle();
+      expect(remove, findsNothing);
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }

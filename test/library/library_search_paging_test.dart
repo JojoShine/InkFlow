@@ -260,7 +260,7 @@ void main() {
         find.byKey(const ValueKey('library-next-page')).hitTestable(),
         findsOneWidget,
       );
-      await tester.ensureVisible(find.byTooltip('编辑作品：作品01'));
+      await tester.ensureVisible(find.byTooltip('作品01 的作品操作'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },
@@ -305,21 +305,44 @@ void main() {
     },
   );
 
+  testWidgets('opening a partly visible cover menu keeps it above pagination', (
+    tester,
+  ) async {
+    await showLibrary(tester);
+    tester.view.physicalSize = const Size(960, 640);
+    await tester.pumpAndSettle();
+    final results = find.byKey(const ValueKey('library-results'));
+    final viewport = tester.getRect(results);
+    final trigger = find.byTooltip('作品11 的作品操作');
+    final scroll = tester.state<ScrollableState>(
+      find.descendant(of: results, matching: find.byType(Scrollable)).first,
+    );
+    scroll.position.jumpTo(
+      tester.getRect(trigger).top - (viewport.bottom - 28),
+    );
+    await tester.pumpAndSettle();
+    expect(trigger.hitTestable(), findsOneWidget);
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    final menu = tester.getRect(
+      find
+          .ancestor(
+            of: find.widgetWithText(PopupMenuItem<String>, '编辑作品'),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    expect(menu.top, greaterThanOrEqualTo(viewport.top));
+    expect(menu.bottom, lessThanOrEqualTo(viewport.bottom));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
-    'book actions stay fixed in the cover top right with the title visible',
+    'one cover menu stays within its book and leaves the title visible',
     (tester) async {
       await showLibrary(tester);
       controller.updateAppearance(controller.appearance.select('forest'));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('library-search')),
-        '作品',
-      );
-      await tester.pumpAndSettle();
-      expect(
-        tester.getSize(find.byTooltip('清空搜索')).width,
-        lessThanOrEqualTo(28),
-      );
       final card = find.byKey(
         ValueKey(
           'work-card-${controller.preferences.recentWorks.first.workId}',
@@ -328,25 +351,33 @@ void main() {
       final cover = tester.getRect(
         find.descendant(of: card, matching: find.byType(BookCover)),
       );
-      final edit = find.byTooltip('编辑作品：作品01');
-      final remove = find.byTooltip('删除作品：作品01');
+      final trigger = find.byTooltip('作品01 的作品操作');
+      expect(trigger, findsOneWidget);
+      final button = tester.getRect(trigger);
+      expect(cover.contains(button.topLeft), isTrue);
+      expect(cover.right - button.right, inInclusiveRange(4, 10));
+      expect(button.top - cover.top, inInclusiveRange(4, 10));
+      expect(button.width, lessThanOrEqualTo(28));
+      expect(find.byTooltip('编辑作品：作品01'), findsNothing);
+      await tester.tap(trigger);
+      await tester.pumpAndSettle();
+      final edit = find.widgetWithText(PopupMenuItem<String>, '编辑作品');
+      final remove = find.widgetWithText(PopupMenuItem<String>, '删除作品');
       expect(edit, findsOneWidget);
       expect(remove, findsOneWidget);
-      for (final button in [edit, remove]) {
-        final action = tester.getRect(button);
-        expect(cover.contains(action.topLeft), isTrue);
-        expect(cover.contains(action.bottomRight), isTrue);
-        expect(action.top - cover.top, inInclusiveRange(4, 10));
-        expect(action.width, lessThanOrEqualTo(28));
-      }
-      expect(
-        cover.right - tester.getRect(remove).right,
-        inInclusiveRange(4, 10),
-      );
-      expect(
-        tester.getRect(edit).right,
-        lessThanOrEqualTo(tester.getRect(remove).left),
-      );
+      final surface = find
+          .ancestor(of: edit, matching: find.byType(Material))
+          .first;
+      final menu = tester.getRect(surface);
+      expect(cover.contains(menu.topLeft), isTrue);
+      expect(cover.contains(menu.bottomRight), isTrue);
+      expect(menu.top, greaterThanOrEqualTo(button.bottom));
+      expect(menu.height, lessThanOrEqualTo(76));
+      final palette = InkPalette.from(controller.appearance);
+      expect(tester.widget<Material>(surface).color, palette.background);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      expect(edit, findsNothing);
       final titles = find.descendant(of: card, matching: find.text('作品01'));
       expect(
         titles.evaluate().any(
@@ -355,7 +386,6 @@ void main() {
         ),
         isTrue,
       );
-      expect(find.byType(PopupMenuItem<String>), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
