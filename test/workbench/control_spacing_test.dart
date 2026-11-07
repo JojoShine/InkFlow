@@ -70,7 +70,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
-    for (final width in [1100.0, 960.0]) {
+    for (final width in [1360.0, 1100.0, 960.0]) {
       tester.view.physicalSize = Size(width, 800);
       await tester.pumpWidget(InkFlowApp(controller: c));
       await tester.pumpAndSettle();
@@ -95,7 +95,15 @@ void main() {
       final surface = find
           .ancestor(of: remove, matching: find.byType(Material))
           .first;
-      expect(tester.getRect(surface).overlaps(action), isFalse);
+      final menu = tester.getRect(surface);
+      if (width == 1360) {
+        expect(menu.left, closeTo(button.right + 6, .1));
+        expect(menu.top, closeTo(button.top, .1));
+      } else {
+        expect(menu.right, closeTo(button.left - 6, .1));
+        expect(menu.top, greaterThan(action.bottom));
+      }
+      expect(menu.overlaps(action), isFalse);
       await tester.tapAt(const Offset(20, 200));
       await tester.pumpAndSettle();
       expect(remove, findsNothing);

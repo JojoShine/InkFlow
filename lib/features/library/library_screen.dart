@@ -828,9 +828,8 @@ class _WorkItemMenu extends StatelessWidget {
           final overlay =
               Navigator.of(context).overlay!.context.findRenderObject()!
                   as RenderBox;
-          final viewport = isCard
-              ? Scrollable.of(context).context.findRenderObject()! as RenderBox
-              : null;
+          final viewport =
+              Scrollable.of(context).context.findRenderObject()! as RenderBox;
           await Scrollable.ensureVisible(
             ownerContext,
             alignmentPolicy: isCard
@@ -839,27 +838,21 @@ class _WorkItemMenu extends StatelessWidget {
           );
           await WidgetsBinding.instance.endOfFrame;
           if (!context.mounted || !ownerContext.mounted) return;
-          final owner = ownerContext.findRenderObject()! as RenderBox;
           final trigger = context.findRenderObject()! as RenderBox;
-          final bounds =
-              owner.localToGlobal(Offset.zero, ancestor: overlay) & owner.size;
           final button =
               trigger.localToGlobal(Offset.zero, ancestor: overlay) &
               trigger.size;
           const width = 96.0;
-          var left = bounds.right - 16 - width;
-          var top = (button.top - 76).clamp(8.0, overlay.size.height - 72);
-          if (isCard) {
-            final viewportBottom =
-                viewport!.localToGlobal(Offset.zero, ancestor: overlay).dy +
-                viewport.size.height;
-            left = button.right + 6;
-            if (left + width > overlay.size.width - 8) {
-              left = button.left - width - 6;
-            }
-            top = button.top;
-            if (top + 64 > viewportBottom - 4) top = viewportBottom - 64 - 4;
+          final viewportBottom =
+              viewport.localToGlobal(Offset.zero, ancestor: overlay).dy +
+              viewport.size.height;
+          var left = button.right + 6;
+          var top = button.top;
+          if (left + width > overlay.size.width - 8) {
+            left = button.left - width - 6;
+            if (!isCard) top = button.bottom + 12;
           }
+          if (top + 64 > viewportBottom - 4) top = viewportBottom - 64 - 4;
           final action = await showMenu<String>(
             context: context,
             position: RelativeRect.fromRect(
