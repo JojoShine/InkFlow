@@ -1,8 +1,8 @@
 # InkFlow 桌面构建与 OSS 发布
 
-发布源为私有仓库 [JojoShine/InkFlow](https://github.com/JojoShine/InkFlow)。下载与更新走公开 HTTPS OSS：
+发布源为公开仓库 [JojoShine/InkFlow](https://github.com/JojoShine/InkFlow)。下载与更新走公开 HTTPS OSS：
 `https://tbtparent-me.oss-cn-hangzhou.aliyuncs.com/Download/inkflow/`。
-仓库和 GitHub 工件可保持私有；OSS 的该下载前缀必须允许匿名读取，禁止匿名写入。不要公开 bucket 的其它业务对象。
+仓库源码公开；OSS 的该下载前缀必须允许匿名读取，禁止匿名写入。不要公开 bucket 的其它业务对象。
 
 ## 常规构建
 
@@ -17,15 +17,15 @@ Flutter 固定 `3.41.9`，自带 Dart `3.11.5`；依赖使用已提交 lockfile�
 
 普通构建无签名 secrets 时仍生成 CI 工件；这些工件不代表可公开分发或可自动更新。GitHub Actions 私有仓库构建会使用账户的 Actions 分钟配额。
 
-## 默认：只上传 OSS 供下载
+## 当前：签名应用内更新
 
-当前 tag 发布默认使用 `--downloads-only`：只校验安装包、大小和 SHA256，上传版本目录与 latest/history 清单；不要求 Apple 证书、公证或更新密钥，也不写 appcast 自动更新 feed，不上传宣发页；网页仍保留在 `https://tbtparent.me/inkflow/`。
+仓库已配置 `INKFLOW_SIGNED_UPDATES=true`、Mac Ed25519 / Windows DSA 更新密钥和 OSS 上传凭据。tag 发布会验证更新包签名并写入各架构 appcast；客户端在应用内下载、保存稿件、安装并重启。官网仍保留在 `https://tbtparent.me/inkflow/`。
 
-现在只需要在 repository secrets 配置 `OSS_ACCESS_KEY_ID` 和 `OSS_ACCESS_KEY_SECRET`，使用已有 Bucket `tbtparent-me` / `Download/inkflow/`。不需要另外建立 release environment。RAM 前缀权限模板见下文；下载对象仍需允许公开读取。
+旧预览版没有内置更新公钥，需要先安装一次启用更新的版本。此后沿用同一套密钥，可在应用内完成后续更新。Apple Developer ID / 公证和 Windows Authenticode 是可选的开发者身份签名，不是更新包签名的前提。
 
-后续确实需要签名自动更新时，再将仓库 variable `INKFLOW_SIGNED_UPDATES` 设置为 `true`，并配置下面的完整签名资料。普通下载与签名自动更新是不同发布模式。
+将 `INKFLOW_SIGNED_UPDATES` 关闭时，tag 发布退回 `--downloads-only`：只上传下载包和清单，不写 appcast。上传使用 `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`，限定 Bucket `tbtparent-me` / `Download/inkflow/`；不需要额外的 release environment。
 
-## 可选：签名自动更新配置
+## 签名自动更新配置
 
 用户需要提供的资料与首次可生成的更新密钥见 [一次配置清单](release-setup/checklist.md)，限定 OSS 权限见 [RAM policy](release-setup/oss-upload-policy.json)。
 
@@ -37,12 +37,12 @@ Flutter 固定 `3.41.9`，自带 Dart `3.11.5`；依赖使用已提交 lockfile�
 | `MACOS_ED25519_PUBLIC_KEY` | **正式发布必需**。Sparkle 输出的 base64 公钥，构建前注入 Info.plist `SUPublicEDKey`。发布签名会用打包 app 内的此公钥实际验证，公私钥不匹配会失败。 |
 | `WINDOWS_DSA_PRIVATE_KEY` | **正式发布必需**。auto_updater 1.0.0 / WinSparkle 0.8.1 生成的 `dsa_priv.pem` 完整 PEM 内容。 |
 | `WINDOWS_DSA_PUBLIC_KEY` | 可选，用于普通构建的公钥；tag 构建从私钥派生公钥并覆盖此值。公钥临时文件通过 `windows/runner/update_public_key.rc` 的 `DSAPub DSAPEM` 资源编入 EXE，CMake 必须条件包含该文件。 |
-| `MACOS_CERTIFICATE_P12` | **正式发布必需**。Developer ID Application 签名证书与私钥的 `.p12` 文件，base64 编码。 |
-| `MACOS_CERTIFICATE_PASSWORD` | **正式发布必需**。上述 p12 导出密码。 |
-| `MACOS_SIGN_IDENTITY` | **正式发布必需**，完整 `Developer ID Application: … (TEAMID)` identity。 |
-| `APPLE_ID` | **正式发布必需**，用于 notarytool 的 Apple ID。 |
-| `APPLE_APP_PASSWORD` | **正式发布必需**，该 Apple ID 的 app-specific password。 |
-| `APPLE_TEAM_ID` | **正式发布必需**，Apple Developer Team ID。 |
+| `MACOS_CERTIFICATE_P12` | 可选。Developer ID Application 签名证书与私钥的 `.p12` 文件，base64 编码。 |
+| `MACOS_CERTIFICATE_PASSWORD` | 配置 P12 时必需。上述 p12 导出密码。 |
+| `MACOS_SIGN_IDENTITY` | 可选，完整 `Developer ID Application: … (TEAMID)` identity。 |
+| `APPLE_ID` | 可选，用于 notarytool 的 Apple ID。 |
+| `APPLE_APP_PASSWORD` | 可选，该 Apple ID 的 app-specific password。 |
+| `APPLE_TEAM_ID` | 可选，Apple Developer Team ID。 |
 | `WINDOWS_CERTIFICATE_PFX` | 可选，Authenticode 证书 `.pfx` 的 base64。配置后必须签名成功；当前签安装器本体。 |
 | `WINDOWS_CERTIFICATE_PASSWORD` | 使用 PFX 时必需。 |
 | `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` | **正式发布必需**，建议专用 RAM 身份，只允许目标下载前缀的 GetObject / PutObject / DeleteObject 及列举（限制 ListObjects prefix）。DeleteObject 只需 `.release.lock`。 |
@@ -50,7 +50,7 @@ Flutter 固定 `3.41.9`，自带 Dart `3.11.5`；依赖使用已提交 lockfile�
 
 不要把私钥、p12/pfx、AccessKey、密码提交到 Git。公钥可公开，但本流程通过 secrets 注入以便管理；已安装客户端必须始终保留与发布私钥对应的公钥。丢失或随意轮换更新密钥会切断已安装版本的更新链。
 
-macOS 发布要求 Developer ID、hardened runtime、notarization、stapling 和 Gatekeeper 验证全部成功；这是本项目对官网公开分发的要求。普通 CI 可省略。Windows DSA 更新签名为必需，Authenticode 可选但推荐（不签可能出现 SmartScreen 提示）。两种签名用途不同，Authenticode 不能代替更新签名。
+macOS 配齐 Developer ID / Apple 公证资料时，会执行开发者签名、公证及验证；未配置时仍可通过 Ed25519 更新签名发布。Windows DSA 更新签名为必需，Authenticode 可选但推荐（不签可能出现 SmartScreen 提示）。两种签名用途不同，Authenticode 不能代替更新签名。
 
 macOS 沙盒集成需要 Sparkle installer launcher 配置、mach-lookup exception 及正确 helper entitlements；本项目已启用 network.client，因此按官方指南不启用单独 downloader service。参见 [Sparkle 沙盒指南](https://sparkle-project.org/documentation/sandboxing/)。客户端必须先正确集成 `auto_updater`、公钥与安全退出/安装流程，再宣称自动更新可用。本发布脚本不替代实机更新测试。
 
@@ -58,10 +58,10 @@ macOS 沙盒集成需要 Sparkle installer launcher 配置、mach-lookup excepti
 
 1. 修改 `pubspec.yaml` 为例如 `0.1.0+1`，并更新 `tool/release/notes.txt`（每个非空行是一条发布说明）。版本号使用三段稳定版本，不支持 prerelease。build 取 pubspec，禁止 Actions 自增或覆盖。
 2. 提交变更，确认普通 CI 双端通过，再打 `v0.1.0` tag 并 push。tag 必须与 pubspec 的 `0.1.0` 精确相符，build 号必须大于 OSS **所有历史发布**，语义版本不能下降。相同语义版本的补包也须提高 build。
-3. 三个目标构建完成后，publish job 下载工件，核验文件名、目标、版本、build、长度和 SHA256。默认下载模式允许未签名安装包，但不发布自动更新 feed；开启签名自动更新模式后，额外校验更新签名状态及 mac notarization 状态。缺包、字节改变和缺 OSS 凭据都会拒绝发布。
-4. SDK 获取 OSS 独占 `.release.lock`，核对已有 latest/history，上传不可变版本目录，再上传静态站与 feed/history，最后写 `latest.json`。成功后自动释放 lock。整个发布不会创建 GitHub public release。
+3. 三个目标构建完成后，publish job 下载工件，核验文件名、目标、版本、build、长度和 SHA256。下载模式允许未签名安装包，但不发布自动更新 feed；当前签名自动更新模式额外校验更新签名状态，公证状态单独记录。缺包、字节改变和缺 OSS 凭据都会拒绝发布。
+4. SDK 获取 OSS 独占 `.release.lock`，核对已有 latest/history，上传不可变版本目录，再上传 feed/history（仅指定 `--site-root` 时上传静态站），最后写 `latest.json`。成功后自动释放 lock。整个发布不会创建 GitHub public release。
 
-初始版本使用 `v0.1.0` + build `1`。当前尚未配置 OSS Secrets，因此还不能实际上传；配置两个上传凭据后，默认下载发布不再受 Apple 参数阻塞。下载模式不会写入或替换已有 appcast；未签名自动更新 feed 始终禁止发布。
+初始版本使用 `v0.1.0` + build `1`。当前已配置 OSS Secrets 和更新密钥。下载模式不会写入或替换已有 appcast；未签名自动更新 feed 始终禁止发布。
 
 ## 对象与协议
 

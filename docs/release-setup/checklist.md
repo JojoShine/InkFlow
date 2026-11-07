@@ -2,13 +2,13 @@
 
 所有值填入 [JojoShine/InkFlow 的 Actions repository secrets](https://github.com/JojoShine/InkFlow/settings/secrets/actions)。不要在聊天、issue 或代码中发送密码、私钥、AccessKey。当前普通 Mac/Windows CI 编译不需要下列签名凭据。
 
-## 仅上传 OSS 下载：现在只需要两项
+## 当前配置
 
-配置 `OSS_ACCESS_KEY_ID` 与 `OSS_ACCESS_KEY_SECRET` 即可使用默认下载发布。Bucket 和路径已固定，不需要 Apple 参数、更新密钥或 Windows 证书。上传角色按 [前缀权限模板](oss-upload-policy.json) 授权，下载对象设为公开可读。
+已配置 `INKFLOW_SIGNED_UPDATES=true`、`OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`、Mac Ed25519 与 Windows DSA 更新密钥，tag 发布启用签名应用内更新。Bucket 和路径已固定。上传角色按 [前缀权限模板](oss-upload-policy.json) 授权，下载对象设为公开可读。
 
-下面是以后启用签名自动更新（variable `INKFLOW_SIGNED_UPDATES=true`）才需要的完整清单。
+仅下载发布可以关闭该 variable；此时不写更新 feed。
 
-## 启用签名自动更新时再准备
+## 可选开发者身份签名资料
 
 | 类别 | Secrets 名称 | 内容 |
 | --- | --- | --- |
@@ -21,9 +21,9 @@
 | OSS 上传 | `OSS_ACCESS_KEY_ID` | 专用 RAM 用户 AccessKey ID。 |
 | OSS 上传 | `OSS_ACCESS_KEY_SECRET` | 对应 AccessKey Secret；按本目录的 policy 限制在指定前缀。 |
 
-签名身份与 Team ID 都能从正确的证书确定，不需要额外申请另一项服务。Apple 公证也支持 API Key 认证，但当前脚本使用上表的 Apple ID + app-specific password，不要同时准备两套。
+上表 Apple 资料仅用于开发者身份签名和公证，不是应用内更新的必需条件。签名身份与 Team ID 都能从正确的证书确定，不需要额外申请另一项服务。Apple 公证也支持 API Key 认证，但当前脚本使用上表的 Apple ID + app-specific password，不要同时准备两套。
 
-## 更新密钥：首次可由我们生成
+## 更新密钥：已配置，须持续沿用
 
 这些密钥验证更新安装包，和 Apple/Windows 开发者证书不是同一种东西。首次发行可以生成；如以前已经发布过带签名的更新，必须提供并沿用原有更新密钥，不能随意更换。
 
@@ -31,7 +31,7 @@
 - `WINDOWS_DSA_PRIVATE_KEY`：当前 WinSparkle 0.8.1 所需的更新密钥。tag 发布会自动从私钥派生公钥。
 - `WINDOWS_DSA_PUBLIC_KEY`：可选，用于普通 CI 的公钥注入，不是正式 tag 发布的必填项。
 
-生成后，私钥要加密存入 GitHub Secrets，并另存安全备份，不进入源码。当前密钥尚未生成或配置，不把“可以生成”描述为已配置完成。当前官网的旧预览版未包含更新公钥，首次正式签名版需要手动安装一次，之后才能沿用固定公钥进行应用内自动更新。
+生成后，私钥要加密存入 GitHub Secrets，并另存安全备份，不进入源码。当前密钥已生成并配置到 GitHub Secrets，私钥另有本机安全备份。当前官网的旧预览版未包含更新公钥，首次正式签名版需要手动安装一次，之后才能沿用固定公钥进行应用内自动更新。
 
 ## Windows 安装器的开发者签名
 
@@ -53,6 +53,6 @@
 
 ## 配置后交付
 
-以匹配 pubspec 的版本 tag 发布，构建 → Developer ID 签名/Apple 公证 → 更新签名验证 → OSS 不可变版本包 → feed/history → latest 清单。官网仍保持 `https://tbtparent.me/inkflow/`，不会改动已有站点。第一次正式发布后会替换服务器的临时预览清单，避免遮住 OSS 新版本。
+以匹配 pubspec 的版本 tag 发布，构建 → 可选 Developer ID 签名/Apple 公证 → 更新签名验证 → OSS 不可变版本包 → feed/history → latest 清单。官网仍保持 `https://tbtparent.me/inkflow/`，不会改动已有站点。应用内更新直接读取 OSS appcast，不依赖官网服务器的预览清单。
 
 参考：[Apple Developer ID](https://developer.apple.com/developer-id/)、[Apple notarytool](https://developer.apple.com/documentation/technotes/tn3147-migrating-to-the-latest-notarization-tool)、[OSS 前缀权限](https://www.alibabacloud.com/help/en/oss/user-guide/access-control-base-on-ram-policy)。
