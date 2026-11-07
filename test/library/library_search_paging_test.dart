@@ -305,7 +305,7 @@ void main() {
     },
   );
 
-  testWidgets('opening a partly visible cover menu keeps it above pagination', (
+  testWidgets('opening a partly visible card menu keeps it above pagination', (
     tester,
   ) async {
     await showLibrary(tester);
@@ -338,7 +338,7 @@ void main() {
   });
 
   testWidgets(
-    'one cover menu stays within its book and leaves the title visible',
+    'card menu opens below its title entry without clipping to the card',
     (tester) async {
       await showLibrary(tester);
       controller.updateAppearance(controller.appearance.select('forest'));
@@ -354,9 +354,8 @@ void main() {
       final trigger = find.byTooltip('作品01 的作品操作');
       expect(trigger, findsOneWidget);
       final button = tester.getRect(trigger);
-      expect(cover.contains(button.topLeft), isTrue);
+      expect(button.top, greaterThanOrEqualTo(cover.bottom));
       expect(cover.right - button.right, inInclusiveRange(4, 10));
-      expect(button.top - cover.top, inInclusiveRange(4, 10));
       expect(button.width, lessThanOrEqualTo(28));
       expect(find.byTooltip('编辑作品：作品01'), findsNothing);
       await tester.tap(trigger);
@@ -369,10 +368,13 @@ void main() {
           .ancestor(of: edit, matching: find.byType(Material))
           .first;
       final menu = tester.getRect(surface);
-      expect(cover.contains(menu.topLeft), isTrue);
-      expect(cover.contains(menu.bottomRight), isTrue);
+      expect(menu.bottom, greaterThan(tester.getRect(card).bottom));
       expect(menu.top, greaterThanOrEqualTo(button.bottom));
-      expect(menu.height, lessThanOrEqualTo(76));
+      expect(
+        tester.getRect(edit).bottom,
+        lessThanOrEqualTo(tester.getRect(remove).top),
+      );
+      expect(menu.right, closeTo(button.right, .1));
       final palette = InkPalette.from(controller.appearance);
       expect(tester.widget<Material>(surface).color, palette.background);
       await tester.tapAt(const Offset(10, 10));

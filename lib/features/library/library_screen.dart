@@ -661,24 +661,35 @@ class _WorkCard extends StatelessWidget {
           builder: (context, constraints) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _LibraryBookCover(
+              BookCover(
                 entry: entry,
-                controller: controller,
+                services: controller.services,
                 width: constraints.maxWidth,
                 height: constraints.maxWidth / _bookCoverAspectRatio,
+                borderRadius: BorderRadius.zero,
               ),
               SizedBox(
                 height: _bookInfoHeight,
                 child: Padding(
                   padding: const EdgeInsets.only(left: 10, right: 4),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      entry.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14, height: 1.4),
-                    ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          entry.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14, height: 1.4),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      _WorkItemMenu(
+                        controller: controller,
+                        entry: entry,
+                        ownerContext: context,
+                        isCard: true,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -771,74 +782,37 @@ ButtonStyle _smallLibraryButton(InkPalette colors) => IconButton.styleFrom(
   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
 );
 
-class _LibraryBookCover extends StatelessWidget {
-  const _LibraryBookCover({
-    required this.controller,
-    required this.entry,
-    required this.width,
-    required this.height,
-  });
-  final WorkbenchController controller;
-  final RecentWork entry;
-  final double width;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: width,
-    height: height,
-    child: Stack(
-      children: [
-        BookCover(
-          entry: entry,
-          services: controller.services,
-          width: width,
-          height: height,
-          borderRadius: BorderRadius.zero,
-        ),
-        Positioned(
-          top: 6,
-          right: 6,
-          child: _WorkItemMenu(
-            controller: controller,
-            entry: entry,
-            ownerContext: context,
-            onCover: true,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 class _WorkItemMenu extends StatelessWidget {
   const _WorkItemMenu({
     required this.controller,
     required this.entry,
     required this.ownerContext,
-    this.onCover = false,
+    this.isCard = false,
   });
   final WorkbenchController controller;
   final RecentWork entry;
   final BuildContext ownerContext;
-  final bool onCover;
+  final bool isCard;
 
   @override
   Widget build(BuildContext context) {
     final colors = InkPalette.of(context);
-    final overImage = onCover && entry.coverFile != null;
     PopupMenuItem<String> item(String value, String label, IconData icon) {
       final color = value == 'trash'
           ? Theme.of(context).colorScheme.error
           : colors.ink;
       return PopupMenuItem<String>(
         value: value,
-        height: onCover ? 30 : 26,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        height: isCard ? 34 : 26,
+        padding: EdgeInsets.symmetric(horizontal: isCard ? 12 : 10),
         child: Row(
           children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 8),
+            Icon(
+              icon,
+              size: 14,
+              color: isCard && value == 'edit' ? colors.muted : color,
+            ),
+            SizedBox(width: isCard ? 10 : 8),
             Text(label, style: TextStyle(fontSize: 13, color: color)),
           ],
         ),
@@ -850,22 +824,18 @@ class _WorkItemMenu extends StatelessWidget {
       child: IconButton(
         tooltip: '${entry.title} 的作品操作',
         style: _smallLibraryButton(colors),
-        icon: Icon(
-          InkIcons.more,
-          size: 16,
-          color: overImage ? Colors.white : colors.muted,
-          shadows: overImage
-              ? const [Shadow(color: Colors.black54, blurRadius: 3)]
-              : null,
-        ),
+        icon: const Icon(InkIcons.more, size: 16),
         onPressed: () async {
           final ownerContext = this.ownerContext;
           final overlay =
               Navigator.of(context).overlay!.context.findRenderObject()!
                   as RenderBox;
+          final viewport = isCard
+              ? Scrollable.of(context).context.findRenderObject()! as RenderBox
+              : null;
           await Scrollable.ensureVisible(
             ownerContext,
-            alignmentPolicy: onCover
+            alignmentPolicy: isCard
                 ? ScrollPositionAlignmentPolicy.keepVisibleAtEnd
                 : ScrollPositionAlignmentPolicy.keepVisibleAtStart,
           );
@@ -878,11 +848,18 @@ class _WorkItemMenu extends StatelessWidget {
           final button =
               trigger.localToGlobal(Offset.zero, ancestor: overlay) &
               trigger.size;
-          final width = (bounds.width - 12).clamp(0.0, 120.0);
-          final left = bounds.right - (onCover ? 6 : 16) - width;
-          final top = onCover
-              ? button.bottom + 4
-              : (button.top - 64).clamp(bounds.top + 4, bounds.bottom - 56);
+          final width = isCard ? 138.0 : (bounds.width - 12).clamp(0.0, 120.0);
+          final left = isCard
+              ? button.right - width
+              : bounds.right - 16 - width;
+          var top = (button.top - 64).clamp(bounds.top + 4, bounds.bottom - 56);
+          if (isCard) {
+            final viewportBottom =
+                viewport!.localToGlobal(Offset.zero, ancestor: overlay).dy +
+                viewport.size.height;
+            top = button.bottom + 6;
+            if (top + 78 > viewportBottom - 4) top = button.top - 78 - 6;
+          }
           final action = await showMenu<String>(
             context: context,
             position: RelativeRect.fromRect(
@@ -892,13 +869,15 @@ class _WorkItemMenu extends StatelessWidget {
             constraints: BoxConstraints.tightFor(width: width),
             color: colors.background,
             surfaceTintColor: Colors.transparent,
-            shadowColor: colors.ink.withValues(alpha: .12),
+            shadowColor: colors.ink.withValues(alpha: isCard ? .10 : .12),
             elevation: 2,
-            menuPadding: EdgeInsets.symmetric(vertical: onCover ? 4 : 0),
+            menuPadding: isCard ? const EdgeInsets.all(5) : EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(6),
-              side: BorderSide(color: colors.line.withValues(alpha: .4)),
+              side: BorderSide(
+                color: colors.line.withValues(alpha: isCard ? .25 : .4),
+              ),
             ),
             items: [
               item('edit', '编辑作品', InkIcons.edit),
