@@ -75,7 +75,7 @@ void main() {
                 .descendant(of: pane, matching: find.byType(StudySurface))
                 .first,
           );
-          expect(surface.color, Colors.black);
+          expect(surface.color, const Color(0xff242424));
           expect(surface.settings.texture, StudyTexture.none);
           final restored = AppearanceSettings.fromJson(c.appearance.toJson());
           expect(restored.presetId, 'black');
