@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkflow/app/inkflow_app.dart';
 import 'package:inkflow/features/appearance/appearance_settings.dart';
+import 'package:inkflow/features/appearance/study_surface.dart';
+import 'package:inkflow/features/appearance/theme_presets.dart';
 import 'package:inkflow/features/editor/novel_editor.dart';
 import 'package:inkflow/features/workbench/workbench_controller.dart';
 import 'package:inkflow/features/works/work_repository.dart';
@@ -55,6 +57,7 @@ void main() {
       for (final id in [
         'paper',
         'night',
+        'black',
         'pixel_meadow',
         'pixel_starlight',
         'sakura',
@@ -65,6 +68,32 @@ void main() {
         expect(tester.state(find.byType(NovelEditor)), same(editor));
         expect(c.session.controller.value, value);
         expect(c.preferences.layout.fontFamily, 'Songti SC');
+        if (id == 'black') {
+          final pane = find.byKey(const ValueKey('editor-pane'));
+          final surface = tester.widget<StudySurface>(
+            find
+                .descendant(of: pane, matching: find.byType(StudySurface))
+                .first,
+          );
+          expect(surface.color, Colors.black);
+          expect(surface.settings.texture, StudyTexture.none);
+          final restored = AppearanceSettings.fromJson(c.appearance.toJson());
+          expect(restored.presetId, 'black');
+          expect(inkTheme(restored).brightness, Brightness.dark);
+          final palette = InkPalette.from(restored);
+          for (final color in [
+            palette.background,
+            palette.paper,
+            palette.ink,
+            palette.muted,
+            palette.line,
+            palette.selection,
+            palette.accent,
+          ]) {
+            expect(color.r, closeTo(color.g, .001));
+            expect(color.g, closeTo(color.b, .001));
+          }
+        }
         expect(tester.takeException(), isNull);
       }
       await tester.pumpWidget(const SizedBox.shrink());

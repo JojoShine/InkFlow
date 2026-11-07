@@ -11,6 +11,7 @@ void main() {
   for (final (id, texture) in [
     ('paper', null),
     ('night', null),
+    ('black', null),
     ('forest', null),
     ('paper', StudyTexture.none),
     ('night', StudyTexture.none),
@@ -67,7 +68,9 @@ void main() {
         }
         expect(
           changed,
-          id == 'forest' || texture == StudyTexture.none ? 0 : greaterThan(100),
+          settings.texture == StudyTexture.none || texture == StudyTexture.none
+              ? 0
+              : greaterThan(100),
         );
         await tester.pump(const Duration(seconds: 2));
         expect(tester.binding.hasScheduledFrame, isFalse);

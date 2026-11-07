@@ -91,7 +91,7 @@ void main() {
       await tester.pumpWidget(InkFlowApp(controller: c));
       await tester.tap(find.text('外观'));
       await tester.pumpAndSettle();
-      for (final label in ['温暖书房', '夜间书房', '雾林晨光', '暮色海岸', '雨夜书窗']) {
+      for (final label in ['温暖书房', '夜间书房', '纯黑书房', '雾林晨光', '暮色海岸', '雨夜书窗']) {
         expect(find.text(label), findsOneWidget);
       }
       final list = find.descendant(
