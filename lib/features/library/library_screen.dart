@@ -801,21 +801,36 @@ class _WorkItemMenu extends StatelessWidget {
       final color = value == 'trash'
           ? Theme.of(context).colorScheme.error
           : colors.ink;
+      final text = Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          color: color,
+          fontWeight: isCard ? FontWeight.w400 : null,
+          fontFamily: isCard ? 'Arial' : null,
+          fontFamilyFallback: isCard
+              ? const [
+                  'PingFang SC',
+                  'Microsoft YaHei',
+                  'Noto Sans CJK SC',
+                  'sans-serif',
+                ]
+              : null,
+        ),
+      );
       return PopupMenuItem<String>(
         value: value,
-        height: isCard ? 34 : 26,
+        height: isCard ? 28 : 26,
         padding: EdgeInsets.symmetric(horizontal: isCard ? 12 : 10),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: isCard && value == 'edit' ? colors.muted : color,
-            ),
-            SizedBox(width: isCard ? 10 : 8),
-            Text(label, style: TextStyle(fontSize: 13, color: color)),
-          ],
-        ),
+        child: isCard
+            ? text
+            : Row(
+                children: [
+                  Icon(icon, size: 14, color: color),
+                  const SizedBox(width: 8),
+                  text,
+                ],
+              ),
       );
     }
 
@@ -848,7 +863,7 @@ class _WorkItemMenu extends StatelessWidget {
           final button =
               trigger.localToGlobal(Offset.zero, ancestor: overlay) &
               trigger.size;
-          final width = isCard ? 138.0 : (bounds.width - 12).clamp(0.0, 120.0);
+          final width = isCard ? 96.0 : (bounds.width - 12).clamp(0.0, 120.0);
           var left = bounds.right - 16 - width;
           var top = (button.top - 64).clamp(bounds.top + 4, bounds.bottom - 56);
           if (isCard) {
@@ -860,7 +875,7 @@ class _WorkItemMenu extends StatelessWidget {
               left = button.left - width - 6;
             }
             top = button.top;
-            if (top + 78 > viewportBottom - 4) top = viewportBottom - 78 - 4;
+            if (top + 64 > viewportBottom - 4) top = viewportBottom - 64 - 4;
           }
           final action = await showMenu<String>(
             context: context,
@@ -873,17 +888,17 @@ class _WorkItemMenu extends StatelessWidget {
             surfaceTintColor: Colors.transparent,
             shadowColor: colors.ink.withValues(alpha: isCard ? .10 : .12),
             elevation: 2,
-            menuPadding: isCard ? const EdgeInsets.all(5) : EdgeInsets.zero,
+            menuPadding: isCard ? const EdgeInsets.all(4) : EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(isCard ? 4 : 6),
               side: BorderSide(
                 color: colors.line.withValues(alpha: isCard ? .25 : .4),
               ),
             ),
             items: [
-              item('edit', '编辑作品', InkIcons.edit),
-              item('trash', '删除作品', InkIcons.trash),
+              item('edit', isCard ? '编辑' : '编辑作品', InkIcons.edit),
+              item('trash', isCard ? '删除' : '删除作品', InkIcons.trash),
             ],
           );
           if (action == null || !context.mounted) return;

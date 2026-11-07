@@ -327,7 +327,7 @@ void main() {
     final menu = tester.getRect(
       find
           .ancestor(
-            of: find.widgetWithText(PopupMenuItem<String>, '编辑作品'),
+            of: find.widgetWithText(PopupMenuItem<String>, '编辑'),
             matching: find.byType(Material),
           )
           .first,
@@ -341,16 +341,16 @@ void main() {
     'card menu opens left when the window has no space on the right',
     (tester) async {
       await showLibrary(tester);
-      tester.view.physicalSize = const Size(960, 1000);
+      tester.view.physicalSize = const Size(1040, 1000);
       await tester.pumpAndSettle();
-      final trigger = find.byTooltip('作品05 的作品操作');
+      final trigger = find.byTooltip('作品06 的作品操作');
       final button = tester.getRect(trigger);
       await tester.tap(trigger);
       await tester.pumpAndSettle();
       final menu = tester.getRect(
         find
             .ancestor(
-              of: find.widgetWithText(PopupMenuItem<String>, '编辑作品'),
+              of: find.widgetWithText(PopupMenuItem<String>, '编辑'),
               matching: find.byType(Material),
             )
             .first,
@@ -383,8 +383,8 @@ void main() {
     expect(find.byTooltip('编辑作品：作品01'), findsNothing);
     await tester.tap(trigger);
     await tester.pumpAndSettle();
-    final edit = find.widgetWithText(PopupMenuItem<String>, '编辑作品');
-    final remove = find.widgetWithText(PopupMenuItem<String>, '删除作品');
+    final edit = find.widgetWithText(PopupMenuItem<String>, '编辑');
+    final remove = find.widgetWithText(PopupMenuItem<String>, '删除');
     expect(edit, findsOneWidget);
     expect(remove, findsOneWidget);
     final surface = find
@@ -393,6 +393,7 @@ void main() {
     final menu = tester.getRect(surface);
     expect(menu.bottom, greaterThan(tester.getRect(card).bottom));
     expect(menu.top, closeTo(button.top, .1));
+    expect(menu.width, lessThan(cover.width * .75));
     expect(
       tester.getRect(edit).bottom,
       lessThanOrEqualTo(tester.getRect(remove).top),
