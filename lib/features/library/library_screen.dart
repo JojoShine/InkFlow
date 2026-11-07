@@ -849,16 +849,18 @@ class _WorkItemMenu extends StatelessWidget {
               trigger.localToGlobal(Offset.zero, ancestor: overlay) &
               trigger.size;
           final width = isCard ? 138.0 : (bounds.width - 12).clamp(0.0, 120.0);
-          final left = isCard
-              ? button.right - width
-              : bounds.right - 16 - width;
+          var left = bounds.right - 16 - width;
           var top = (button.top - 64).clamp(bounds.top + 4, bounds.bottom - 56);
           if (isCard) {
             final viewportBottom =
                 viewport!.localToGlobal(Offset.zero, ancestor: overlay).dy +
                 viewport.size.height;
-            top = button.bottom + 6;
-            if (top + 78 > viewportBottom - 4) top = button.top - 78 - 6;
+            left = button.right + 6;
+            if (left + width > overlay.size.width - 8) {
+              left = button.left - width - 6;
+            }
+            top = button.top;
+            if (top + 78 > viewportBottom - 4) top = viewportBottom - 78 - 4;
           }
           final action = await showMenu<String>(
             context: context,

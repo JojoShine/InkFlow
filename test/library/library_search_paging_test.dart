@@ -338,57 +338,79 @@ void main() {
   });
 
   testWidgets(
-    'card menu opens below its title entry without clipping to the card',
+    'card menu opens left when the window has no space on the right',
     (tester) async {
       await showLibrary(tester);
-      controller.updateAppearance(controller.appearance.select('forest'));
+      tester.view.physicalSize = const Size(960, 1000);
       await tester.pumpAndSettle();
-      final card = find.byKey(
-        ValueKey(
-          'work-card-${controller.preferences.recentWorks.first.workId}',
-        ),
-      );
-      final cover = tester.getRect(
-        find.descendant(of: card, matching: find.byType(BookCover)),
-      );
-      final trigger = find.byTooltip('作品01 的作品操作');
-      expect(trigger, findsOneWidget);
+      final trigger = find.byTooltip('作品05 的作品操作');
       final button = tester.getRect(trigger);
-      expect(button.top, greaterThanOrEqualTo(cover.bottom));
-      expect(cover.right - button.right, inInclusiveRange(4, 10));
-      expect(button.width, lessThanOrEqualTo(28));
-      expect(find.byTooltip('编辑作品：作品01'), findsNothing);
       await tester.tap(trigger);
       await tester.pumpAndSettle();
-      final edit = find.widgetWithText(PopupMenuItem<String>, '编辑作品');
-      final remove = find.widgetWithText(PopupMenuItem<String>, '删除作品');
-      expect(edit, findsOneWidget);
-      expect(remove, findsOneWidget);
-      final surface = find
-          .ancestor(of: edit, matching: find.byType(Material))
-          .first;
-      final menu = tester.getRect(surface);
-      expect(menu.bottom, greaterThan(tester.getRect(card).bottom));
-      expect(menu.top, greaterThanOrEqualTo(button.bottom));
-      expect(
-        tester.getRect(edit).bottom,
-        lessThanOrEqualTo(tester.getRect(remove).top),
+      final menu = tester.getRect(
+        find
+            .ancestor(
+              of: find.widgetWithText(PopupMenuItem<String>, '编辑作品'),
+              matching: find.byType(Material),
+            )
+            .first,
       );
-      expect(menu.right, closeTo(button.right, .1));
-      final palette = InkPalette.from(controller.appearance);
-      expect(tester.widget<Material>(surface).color, palette.background);
-      await tester.tapAt(const Offset(10, 10));
-      await tester.pumpAndSettle();
-      expect(edit, findsNothing);
-      final titles = find.descendant(of: card, matching: find.text('作品01'));
-      expect(
-        titles.evaluate().any(
-          (element) =>
-              tester.getRect(find.byWidget(element.widget)).top >= cover.bottom,
-        ),
-        isTrue,
-      );
+      expect(menu.right, closeTo(button.left - 6, .1));
+      expect(menu.top, closeTo(button.top, .1));
+      expect(menu.left, greaterThanOrEqualTo(8));
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('card menu opens to the right of its title entry', (
+    tester,
+  ) async {
+    await showLibrary(tester);
+    controller.updateAppearance(controller.appearance.select('forest'));
+    await tester.pumpAndSettle();
+    final card = find.byKey(
+      ValueKey('work-card-${controller.preferences.recentWorks.first.workId}'),
+    );
+    final cover = tester.getRect(
+      find.descendant(of: card, matching: find.byType(BookCover)),
+    );
+    final trigger = find.byTooltip('作品01 的作品操作');
+    expect(trigger, findsOneWidget);
+    final button = tester.getRect(trigger);
+    expect(button.top, greaterThanOrEqualTo(cover.bottom));
+    expect(cover.right - button.right, inInclusiveRange(4, 10));
+    expect(button.width, lessThanOrEqualTo(28));
+    expect(find.byTooltip('编辑作品：作品01'), findsNothing);
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    final edit = find.widgetWithText(PopupMenuItem<String>, '编辑作品');
+    final remove = find.widgetWithText(PopupMenuItem<String>, '删除作品');
+    expect(edit, findsOneWidget);
+    expect(remove, findsOneWidget);
+    final surface = find
+        .ancestor(of: edit, matching: find.byType(Material))
+        .first;
+    final menu = tester.getRect(surface);
+    expect(menu.bottom, greaterThan(tester.getRect(card).bottom));
+    expect(menu.top, closeTo(button.top, .1));
+    expect(
+      tester.getRect(edit).bottom,
+      lessThanOrEqualTo(tester.getRect(remove).top),
+    );
+    expect(menu.left, closeTo(button.right + 6, .1));
+    final palette = InkPalette.from(controller.appearance);
+    expect(tester.widget<Material>(surface).color, palette.background);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    expect(edit, findsNothing);
+    final titles = find.descendant(of: card, matching: find.text('作品01'));
+    expect(
+      titles.evaluate().any(
+        (element) =>
+            tester.getRect(find.byWidget(element.widget)).top >= cover.bottom,
+      ),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
