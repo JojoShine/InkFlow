@@ -110,6 +110,7 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
   bool _disposed = false, _installActive = false;
   int _installGeneration = 0;
   Timer? _checkTimeout;
+  String? _noUpdateDescription;
 
   bool get busy =>
       _requesting ||
@@ -189,6 +190,7 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
     }
     if (!canCheck) return;
     _requesting = true;
+    _noUpdateDescription = null;
     availableVersion = null;
     availableDownloadUri = null;
     _set(UpdateStatus.checking, '正在检查更新…');
@@ -255,6 +257,7 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
   @override
   void onUpdaterCheckingForUpdate(Appcast? appcast) {
     if (_acceptEvents && !_installActive) {
+      _noUpdateDescription = null;
       _set(UpdateStatus.checking, '正在检查更新…');
     }
   }
@@ -270,6 +273,7 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
   void onUpdaterUpdateNotAvailable(UpdaterError? error) {
     // Sparkle includes its normal "no update" explanation in this event's error.
     if (_acceptEvents && !_installActive) {
+      _noUpdateDescription = error?.message;
       availableVersion = null;
       _set(UpdateStatus.upToDate, '当前已是最新版本。');
     }
@@ -352,7 +356,11 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
     if (!_acceptEvents) return;
     // Sparkle also calls didAbortWithError(SUNoUpdateError) after reporting
     // no update. Keep that completed result until a new check starts.
-    if (_platform == TargetPlatform.macOS && status == UpdateStatus.upToDate) {
+    if (_platform == TargetPlatform.macOS &&
+        status == UpdateStatus.upToDate &&
+        _noUpdateDescription != null &&
+        error?.message == _noUpdateDescription) {
+      _noUpdateDescription = null;
       return;
     }
     if (_installActive) {

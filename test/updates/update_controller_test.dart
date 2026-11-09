@@ -124,9 +124,12 @@ void main() {
 
   test('macOS no-update completion is not overwritten by its abort callback', () async {
     await controller.checkForUpdates();
-    backend.listener!.onUpdaterUpdateNotAvailable(null);
-    backend.listener!.onUpdaterError(UpdaterError('No new update was found'));
+    final noUpdate = UpdaterError('No new update was found');
+    backend.listener!.onUpdaterUpdateNotAvailable(noUpdate);
+    backend.listener!.onUpdaterError(noUpdate);
     expect(controller.status, UpdateStatus.upToDate);
+    backend.listener!.onUpdaterError(UpdaterError('HTTP 404'));
+    expect(controller.status, UpdateStatus.error);
     backend.failCheck = true;
     await controller.checkForUpdates();
     expect(controller.status, UpdateStatus.error);
