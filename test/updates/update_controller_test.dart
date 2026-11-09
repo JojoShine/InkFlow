@@ -109,6 +109,29 @@ void main() {
     expect(controller.status, UpdateStatus.available);
   });
 
+  test('new checks immediately replace a cached failure with progress', () async {
+    backend.failCheck = true;
+    await controller.checkForUpdates();
+    expect(controller.status, UpdateStatus.error);
+    backend.failCheck = false;
+    final request = controller.checkForUpdates();
+    expect(controller.status, UpdateStatus.checking);
+    expect(controller.message, '正在检查更新…');
+    await request;
+    backend.listener!.onUpdaterUpdateNotAvailable(null);
+    expect(controller.status, UpdateStatus.upToDate);
+  });
+
+  test('macOS no-update completion is not overwritten by its abort callback', () async {
+    await controller.checkForUpdates();
+    backend.listener!.onUpdaterUpdateNotAvailable(null);
+    backend.listener!.onUpdaterError(UpdaterError('No new update was found'));
+    expect(controller.status, UpdateStatus.upToDate);
+    backend.failCheck = true;
+    await controller.checkForUpdates();
+    expect(controller.status, UpdateStatus.error);
+  });
+
   test('failed save prevents checking and allows retry', () async {
     saveOK = false;
     await controller.checkForUpdates();

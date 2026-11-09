@@ -189,7 +189,9 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
     }
     if (!canCheck) return;
     _requesting = true;
-    _notify();
+    availableVersion = null;
+    availableDownloadUri = null;
+    _set(UpdateStatus.checking, '正在检查更新…');
     try {
       await initialize();
       if (_disposed) return;
@@ -348,6 +350,11 @@ class UpdateController extends ChangeNotifier with UpdaterListener {
   @override
   void onUpdaterError(UpdaterError? error) {
     if (!_acceptEvents) return;
+    // Sparkle also calls didAbortWithError(SUNoUpdateError) after reporting
+    // no update. Keep that completed result until a new check starts.
+    if (_platform == TargetPlatform.macOS && status == UpdateStatus.upToDate) {
+      return;
+    }
     if (_installActive) {
       unawaited(_installationFailed('更新安装未完成，已恢复编辑。请稍后重试。'));
     } else {

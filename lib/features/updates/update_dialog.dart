@@ -6,7 +6,9 @@ Future<void> showAppUpdates(
   BuildContext context,
   UpdateController controller,
 ) async {
-  unawaited(controller.initialize());
+  if (controller.status != UpdateStatus.downloaded) {
+    unawaited(controller.checkForUpdates());
+  }
   await showDialog<void>(
     context: context,
     builder: (_) => _UpdateDialog(controller: controller),
@@ -66,7 +68,12 @@ class _UpdateDialog extends StatelessWidget {
           FilledButton(
             onPressed: controller.canCheck ? controller.checkForUpdates : null,
             child: Text(
-              controller.status == UpdateStatus.error ? '重试' : '检查更新',
+              controller.status == UpdateStatus.error
+                  ? '重试'
+                  : controller.status == UpdateStatus.available &&
+                        !controller.usesDownloadUpdates
+                  ? '升级'
+                  : '检查更新',
             ),
           ),
         ],

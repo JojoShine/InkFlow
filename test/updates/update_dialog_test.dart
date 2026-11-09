@@ -1,3 +1,4 @@
+import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkflow/features/updates/update_controller.dart';
@@ -37,9 +38,7 @@ void main() {
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
     expect(find.text('当前版本 4.5.6 (89)'), findsOneWidget);
-    expect(backend.checks, 0);
-    await tester.tap(find.text('检查更新'));
-    await tester.pumpAndSettle();
+    expect(backend.checks, 1);
     expect(find.text('更新服务暂未就绪，请稍后重试。'), findsOneWidget);
     backend.failCheck = false;
     await tester.tap(find.text('重试'));
@@ -49,6 +48,19 @@ void main() {
     backend.listener!.onUpdaterUpdateNotAvailable(null);
     await tester.pumpAndSettle();
     expect(find.text('当前已是最新版本。'), findsOneWidget);
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    // Each opening refreshes the result instead of reusing the previous one.
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    expect(backend.checks, 3);
+    expect(find.text('正在检查更新…'), findsOneWidget);
+    backend.listener!.onUpdaterUpdateAvailable(
+      const AppcastItem(displayVersionString: '4.5.7'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('新版本 4.5.7'), findsOneWidget);
+    expect(find.text('升级'), findsOneWidget);
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
   });
@@ -87,8 +99,6 @@ void main() {
         isNotNull,
       );
       expect(find.textContaining('系统更新窗口'), findsNothing);
-      await tester.tap(find.text('检查更新'));
-      await tester.pumpAndSettle();
       expect(find.text('新版本 0.1.1'), findsOneWidget);
       expect(find.text('前往官网下载'), findsOneWidget);
       await tester.tap(find.text('关闭'));
