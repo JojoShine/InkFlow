@@ -88,8 +88,8 @@ Future<void> main(List<String> arguments) async {
   );
   final available = display.visibleSize ?? display.size;
   final initialSize = Size(
-    math.min(1360, available.width - 24),
-    math.min(1000, available.height - 24),
+    math.min(1600, available.width - 24),
+    math.min(1080, available.height - 24),
   );
   await windowManager.waitUntilReadyToShow(
     WindowOptions(
